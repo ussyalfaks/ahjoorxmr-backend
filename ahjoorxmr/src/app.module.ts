@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -12,16 +13,28 @@ import { User } from './users/entities/user.entity';
 
 @Module({
   imports: [
-    // TypeORM configuration with SQLite for development
-    // For production, replace with PostgreSQL configuration using environment variables
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: 'database.sqlite', // File-based database (matches typeorm.config.ts)
-      entities: [Membership, Group, User],
-      synchronize: false, // NEVER use synchronize in production - use migrations instead
-      logging: false,
-      // Run migrations automatically on app startup (optional - remove in production)
-      migrationsRun: process.env.NODE_ENV !== 'production',
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => {
+        const isDevelopment =
+          configService.get<string>('NODE_ENV') === 'development';
+        return {
+          type: 'postgres',
+          host: configService.get<string>('DB_HOST') || 'localhost',
+          port: parseInt(configService.get<string>('DB_PORT') || '5432', 10),
+          username: configService.get<string>('DB_USERNAME') || 'postgres',
+          password: configService.get<string>('DB_PASSWORD') || 'postgres',
+          database: configService.get<string>('DB_NAME') || 'ahjoorxmr',
+          entities: [Membership, Group, User],
+          synchronize: isDevelopment, // Auto-create tables only in development
+          logging: isDevelopment, // Enable logging only in development
+        };
+      },
+      inject: [ConfigService],
     }),
     HealthModule,
     AuthModule,
@@ -31,4 +44,4 @@ import { User } from './users/entities/user.entity';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

@@ -6,7 +6,11 @@ import { Membership } from '../entities/membership.entity';
 import { Group } from '../../groups/entities/group.entity';
 import { WinstonLogger } from '../../common/logger/winston.logger';
 import { MembershipStatus } from '../entities/membership-status.enum';
-import { NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 
 /**
  * Mock factory for creating Membership entities with default values.
@@ -137,7 +141,7 @@ describe('MembershipsService', () => {
   describe('Mock Factories', () => {
     it('should create a mock membership with default values', () => {
       const membership = createMockMembership();
-      
+
       expect(membership.id).toBeDefined();
       expect(membership.groupId).toBeDefined();
       expect(membership.userId).toBeDefined();
@@ -156,7 +160,7 @@ describe('MembershipsService', () => {
         status: MembershipStatus.SUSPENDED,
         hasReceivedPayout: true,
       });
-      
+
       expect(membership.payoutOrder).toBe(5);
       expect(membership.status).toBe(MembershipStatus.SUSPENDED);
       expect(membership.hasReceivedPayout).toBe(true);
@@ -165,14 +169,14 @@ describe('MembershipsService', () => {
 
     it('should create a mock group with default values', () => {
       const group = createMockGroup();
-      
+
       expect(group.id).toBeDefined();
       expect(group.status).toBe('PENDING');
     });
 
     it('should create a mock group with overrides', () => {
       const group = createMockGroup({ status: 'ACTIVE' });
-      
+
       expect(group.status).toBe('ACTIVE');
     });
   });

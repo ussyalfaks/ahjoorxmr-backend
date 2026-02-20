@@ -11,7 +11,11 @@ export class ErrorResponseDto {
     description: 'Error message or array of error messages',
     oneOf: [
       { type: 'string', example: 'Bad Request' },
-      { type: 'array', items: { type: 'string' }, example: ['field is required'] },
+      {
+        type: 'array',
+        items: { type: 'string' },
+        example: ['field is required'],
+      },
     ],
   })
   message: string | string[];
