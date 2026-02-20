@@ -28,7 +28,7 @@ const walletAddressArb = fc.string({ minLength: 1, maxLength: 255 });
 const membershipStatusArb = fc.constantFrom(
   MembershipStatus.ACTIVE,
   MembershipStatus.SUSPENDED,
-  MembershipStatus.REMOVED
+  MembershipStatus.REMOVED,
 );
 
 /**
@@ -58,12 +58,16 @@ const membershipArb = fc.record({
 /**
  * Type definition for mocked TypeORM repository
  */
-type MockRepository<T extends ObjectLiteral = any> = Partial<Record<keyof Repository<T>, jest.Mock>>;
+type MockRepository<T extends ObjectLiteral = any> = Partial<
+  Record<keyof Repository<T>, jest.Mock>
+>;
 
 /**
  * Creates a mock repository with Jest mock functions
  */
-const createMockRepository = <T extends ObjectLiteral = any>(): MockRepository<T> => ({
+const createMockRepository = <
+  T extends ObjectLiteral = any,
+>(): MockRepository<T> => ({
   find: jest.fn(),
   findOne: jest.fn(),
   create: jest.fn(),
@@ -142,9 +146,11 @@ describe('MembershipsService Property-Based Tests', () => {
     it('should generate valid UUIDs', () => {
       fc.assert(
         fc.property(uuidArb, (uuid) => {
-          expect(uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+          expect(uuid).toMatch(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+          );
         }),
-        { numRuns: 10 }
+        { numRuns: 10 },
       );
     });
 
@@ -154,16 +160,20 @@ describe('MembershipsService Property-Based Tests', () => {
           expect(address.length).toBeGreaterThanOrEqual(1);
           expect(address.length).toBeLessThanOrEqual(255);
         }),
-        { numRuns: 10 }
+        { numRuns: 10 },
       );
     });
 
     it('should generate valid membership statuses', () => {
       fc.assert(
         fc.property(membershipStatusArb, (status) => {
-          expect([MembershipStatus.ACTIVE, MembershipStatus.SUSPENDED, MembershipStatus.REMOVED]).toContain(status);
+          expect([
+            MembershipStatus.ACTIVE,
+            MembershipStatus.SUSPENDED,
+            MembershipStatus.REMOVED,
+          ]).toContain(status);
         }),
-        { numRuns: 10 }
+        { numRuns: 10 },
       );
     });
 
@@ -173,7 +183,7 @@ describe('MembershipsService Property-Based Tests', () => {
           expect(group.id).toBeDefined();
           expect(['PENDING', 'ACTIVE', 'COMPLETED']).toContain(group.status);
         }),
-        { numRuns: 10 }
+        { numRuns: 10 },
       );
     });
 
@@ -187,9 +197,13 @@ describe('MembershipsService Property-Based Tests', () => {
           expect(membership.payoutOrder).toBeGreaterThanOrEqual(0);
           expect(typeof membership.hasReceivedPayout).toBe('boolean');
           expect(typeof membership.hasPaidCurrentRound).toBe('boolean');
-          expect([MembershipStatus.ACTIVE, MembershipStatus.SUSPENDED, MembershipStatus.REMOVED]).toContain(membership.status);
+          expect([
+            MembershipStatus.ACTIVE,
+            MembershipStatus.SUSPENDED,
+            MembershipStatus.REMOVED,
+          ]).toContain(membership.status);
         }),
-        { numRuns: 10 }
+        { numRuns: 10 },
       );
     });
   });
