@@ -1,4 +1,14 @@
-import { Controller, Post, Delete, Get, HttpCode, HttpStatus, Param, Body, ParseUUIDPipe } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Body,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { MembershipsService } from './memberships.service';
 import { CreateMembershipDto } from './dto/create-membership.dto';
 import { MembershipResponseDto } from './dto/membership-response.dto';
@@ -93,6 +103,4 @@ export class MembershipsController {
       updatedAt: membership.updatedAt.toISOString(),
     }));
   }
-
 }
-

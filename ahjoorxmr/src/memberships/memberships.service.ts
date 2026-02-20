@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryFailedError } from 'typeorm';
 import { Membership } from './entities/membership.entity';
@@ -31,7 +36,9 @@ export class MembershipsService {
    * @private
    */
   private async validateGroupNotActive(groupId: string): Promise<void> {
-    const group = await this.groupRepository.findOne({ where: { id: groupId } });
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+    });
 
     if (!group) {
       this.logger.warn(`Group ${groupId} not found`, 'MembershipsService');
@@ -39,8 +46,13 @@ export class MembershipsService {
     }
 
     if (group.status === 'ACTIVE') {
-      this.logger.warn(`Attempted to modify memberships for active group ${groupId}`, 'MembershipsService');
-      throw new BadRequestException('Cannot modify memberships for an active group');
+      this.logger.warn(
+        `Attempted to modify memberships for active group ${groupId}`,
+        'MembershipsService',
+      );
+      throw new BadRequestException(
+        'Cannot modify memberships for an active group',
+      );
     }
   }
 

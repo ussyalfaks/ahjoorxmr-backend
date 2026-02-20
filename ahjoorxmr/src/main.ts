@@ -38,8 +38,8 @@ async function bootstrap() {
   });
 
   // Setup Swagger documentation
-  const isSwaggerEnabled = 
-    process.env.NODE_ENV !== 'production' || 
+  const isSwaggerEnabled =
+    process.env.NODE_ENV !== 'production' ||
     process.env.SWAGGER_ENABLED === 'true';
 
   if (isSwaggerEnabled) {
@@ -61,7 +61,7 @@ async function bootstrap() {
       .build();
 
     const document = SwaggerModule.createDocument(app, config, {
-      operationIdFactory: (controllerKey: string, methodKey: string) => 
+      operationIdFactory: (controllerKey: string, methodKey: string) =>
         `${controllerKey}_${methodKey}`,
     });
 
@@ -71,7 +71,9 @@ async function bootstrap() {
       },
     });
 
-    console.log(`Swagger documentation available at: http://localhost:${process.env.PORT ?? 3000}/api/docs`);
+    console.log(
+      `Swagger documentation available at: http://localhost:${process.env.PORT ?? 3000}/api/docs`,
+    );
   }
 
   const port = process.env.PORT ?? 3000;

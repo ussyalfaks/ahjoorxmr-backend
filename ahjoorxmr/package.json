@@ -18,10 +18,14 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "export:spec": "ts-node scripts/export-openapi-spec.ts"
+    "export:spec": "ts-node scripts/export-openapi-spec.ts",
+    "migration:generate": "ts-node --project tsconfig.migration.json scripts/generate-migration.ts",
+    "migration:run": "ts-node --project tsconfig.migration.json scripts/run-migrations.ts",
+    "migration:revert": "ts-node --project tsconfig.migration.json scripts/revert-migration.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.2.6",
@@ -31,6 +35,7 @@
     "class-validator": "^0.14.3",
     "compression": "^1.8.1",
     "helmet": "^8.1.0",
+    "pg": "^8.18.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sqlite3": "^5.1.7",

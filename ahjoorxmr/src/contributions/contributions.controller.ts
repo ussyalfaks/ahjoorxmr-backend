@@ -1,0 +1,153 @@
+import { Controller, Post, Get, HttpCode, HttpStatus, Param, Body, Query, UseGuards, ParseUUIDPipe, ParseIntPipe, Request } from '@nestjs/common';
+import { ContributionsService } from './contributions.service';
+import { CreateContributionDto } from './dto/create-contribution.dto';
+import { ContributionResponseDto } from './dto/contribution-response.dto';
+import { ApiKeyGuard } from './guards/api-key.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+
+/**
+ * Controller for managing ROSCA group contributions.
+ * Provides REST API endpoints for creating and querying contribution records.
+ */
+@Controller('api/v1')
+export class ContributionsController {
+  constructor(private readonly contributionsService: ContributionsService) {}
+
+  /**
+   * Creates a new contribution record (internal endpoint).
+   * Protected by API key authentication for system-to-system communication.
+   *
+   * @param createContributionDto - The contribution data
+   * @returns The created contribution with HTTP 201 status
+   * @throws BadRequestException if validation fails or foreign keys are invalid
+   * @throws UnauthorizedException if API key is missing or invalid
+   * @throws ConflictException if transaction hash already exists
+   */
+  @Post('internal/contributions')
+  @UseGuards(ApiKeyGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async createContribution(
+    @Body() createContributionDto: CreateContributionDto,
+  ): Promise<ContributionResponseDto> {
+    const contribution = await this.contributionsService.createContribution(
+      createContributionDto,
+    );
+
+    // Transform entity to response DTO with ISO date strings
+    return {
+      id: contribution.id,
+      groupId: contribution.groupId,
+      userId: contribution.userId,
+      walletAddress: contribution.walletAddress,
+      roundNumber: contribution.roundNumber,
+      amount: contribution.amount,
+      transactionHash: contribution.transactionHash,
+      timestamp: contribution.timestamp.toISOString(),
+      createdAt: contribution.createdAt.toISOString(),
+      updatedAt: contribution.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * Retrieves all contributions for a specific group.
+   * Optionally filters by round number via query parameter.
+   *
+   * @param groupId - The UUID of the group
+   * @param round - Optional round number to filter by
+   * @returns Array of contributions for the group
+   * @throws BadRequestException if groupId is not a valid UUID or round is invalid
+   * @throws NotFoundException if the group doesn't exist
+   */
+  @Get('groups/:id/contributions')
+  async getGroupContributions(
+    @Param('id', ParseUUIDPipe) groupId: string,
+    @Query('round', new ParseIntPipe({ optional: true })) round?: number,
+  ): Promise<ContributionResponseDto[]> {
+    const contributions = await this.contributionsService.getGroupContributions(
+      groupId,
+      round,
+    );
+
+    // Transform entities to response DTOs with ISO date strings
+    return contributions.map((contribution) => ({
+      id: contribution.id,
+      groupId: contribution.groupId,
+      userId: contribution.userId,
+      walletAddress: contribution.walletAddress,
+      roundNumber: contribution.roundNumber,
+      amount: contribution.amount,
+      transactionHash: contribution.transactionHash,
+      timestamp: contribution.timestamp.toISOString(),
+      createdAt: contribution.createdAt.toISOString(),
+      updatedAt: contribution.updatedAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Retrieves all contributions for a specific group and round.
+   * This is a dedicated endpoint for round-specific queries.
+   *
+   * @param groupId - The UUID of the group
+   * @param round - The round number
+   * @returns Array of contributions for the group and round
+   * @throws BadRequestException if groupId is not a valid UUID or round is invalid
+   * @throws NotFoundException if the group doesn't exist
+   */
+  @Get('groups/:id/contributions/round/:round')
+  async getRoundContributions(
+    @Param('id', ParseUUIDPipe) groupId: string,
+    @Param('round', ParseIntPipe) round: number,
+  ): Promise<ContributionResponseDto[]> {
+    const contributions = await this.contributionsService.getRoundContributions(
+      groupId,
+      round,
+    );
+
+    // Transform entities to response DTOs with ISO date strings
+    return contributions.map((contribution) => ({
+      id: contribution.id,
+      groupId: contribution.groupId,
+      userId: contribution.userId,
+      walletAddress: contribution.walletAddress,
+      roundNumber: contribution.roundNumber,
+      amount: contribution.amount,
+      transactionHash: contribution.transactionHash,
+      timestamp: contribution.timestamp.toISOString(),
+      createdAt: contribution.createdAt.toISOString(),
+      updatedAt: contribution.updatedAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Retrieves all contributions for the authenticated user across all groups.
+   * Protected by JWT authentication.
+   *
+   * @param req - The request object containing authenticated user data
+   * @returns Array of contributions for the authenticated user
+   * @throws UnauthorizedException if JWT token is missing or invalid
+   */
+  @Get('users/me/contributions')
+  @UseGuards(JwtAuthGuard)
+  async getUserContributions(
+    @Request() req: { user: { id: string; userId: string } },
+  ): Promise<ContributionResponseDto[]> {
+    // Extract userId from JWT token (attached by JwtAuthGuard)
+    const userId = req.user.id || req.user.userId;
+
+    const contributions = await this.contributionsService.getUserContributions(userId);
+
+    // Transform entities to response DTOs with ISO date strings
+    return contributions.map((contribution) => ({
+      id: contribution.id,
+      groupId: contribution.groupId,
+      userId: contribution.userId,
+      walletAddress: contribution.walletAddress,
+      roundNumber: contribution.roundNumber,
+      amount: contribution.amount,
+      transactionHash: contribution.transactionHash,
+      timestamp: contribution.timestamp.toISOString(),
+      createdAt: contribution.createdAt.toISOString(),
+      updatedAt: contribution.updatedAt.toISOString(),
+    }));
+  }
+}

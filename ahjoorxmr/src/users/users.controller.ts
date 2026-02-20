@@ -1,15 +1,15 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
   ApiBearerAuth,
-  ApiQuery 
+  ApiQuery,
 } from '@nestjs/swagger';
 import { GetUsersQueryDto, PaginatedUsersResponseDto } from './dto/user.dto';
-import { 
-  InternalServerErrorResponseDto, 
-  ValidationErrorResponseDto 
+import {
+  InternalServerErrorResponseDto,
+  ValidationErrorResponseDto,
 } from '../common/dto/error-response.dto';
 
 // Mock guard for demonstration - replace with actual auth guard
@@ -23,7 +23,8 @@ export class UsersController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get paginated list of users',
-    description: 'Returns a paginated list of users with optional filtering and sorting. Requires authentication.',
+    description:
+      'Returns a paginated list of users with optional filtering and sorting. Requires authentication.',
   })
   @ApiQuery({
     name: 'page',

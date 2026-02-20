@@ -57,6 +57,52 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
+## Database Migrations
+
+This project uses TypeORM migrations to manage database schema changes in a controlled, reproducible way. Migrations are stored in the `migrations/` directory and tracked in version control.
+
+### Why Migrations?
+
+- **Production Safety**: Never use `synchronize: true` in production as it can cause data loss
+- **Version Control**: Schema changes are tracked alongside code changes
+- **Reproducibility**: Apply the same schema changes across all environments
+- **Rollback Support**: Revert problematic changes safely
+
+### Migration Commands
+
+```bash
+# Generate a new migration from entity changes
+$ npm run migration:generate migrations/DescriptiveName
+
+# Run all pending migrations
+$ npm run migration:run
+
+# Revert the last applied migration
+$ npm run migration:revert
+```
+
+### Workflow
+
+1. **Make changes to your entities** (e.g., add a new column to `User`)
+2. **Generate a migration**: `npm run migration:generate migrations/AddEmailToUser`
+3. **Review the generated migration** in the `migrations/` directory
+4. **Run the migration**: `npm run migration:run`
+5. **Commit both the entity changes and migration file** to version control
+
+### Configuration
+
+- **typeorm.config.ts**: DataSource configuration for the TypeORM CLI
+- **migrations/**: Directory containing all migration files
+- **database.sqlite**: File-based SQLite database (for development)
+
+### Important Notes
+
+- Always review generated migrations before running them
+- Test migrations in a development environment first
+- Keep migrations small and focused on a single change
+- Never modify a migration that has been run in production
+- Use descriptive names for migrations (e.g., `AddUserEmailColumn`, `CreateOrdersTable`)
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
