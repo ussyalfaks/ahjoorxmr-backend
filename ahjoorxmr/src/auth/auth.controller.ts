@@ -1,14 +1,14 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
-  ApiBearerAuth 
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { UserProfileDto } from './dto/auth-response.dto';
-import { 
-  InternalServerErrorResponseDto, 
-  NotFoundErrorResponseDto 
+import {
+  InternalServerErrorResponseDto,
+  NotFoundErrorResponseDto,
 } from '../common/dto/error-response.dto';
 
 // Mock guard for demonstration - replace with actual auth guard
@@ -22,7 +22,8 @@ export class AuthController {
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get user profile',
-    description: 'Returns the authenticated user profile information. Requires valid JWT token.',
+    description:
+      'Returns the authenticated user profile information. Requires valid JWT token.',
   })
   @ApiResponse({
     status: 200,

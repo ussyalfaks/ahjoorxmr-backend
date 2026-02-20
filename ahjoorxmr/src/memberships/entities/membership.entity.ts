@@ -1,17 +1,8 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  Index,
-  Unique,
-} from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, Index, Unique } from 'typeorm';
 import { MembershipStatus } from './membership-status.enum';
 import { Group } from '../../groups/entities/group.entity';
 import { User } from '../../users/entities/user.entity';
+import { BaseEntity } from '../../common/entities/base.entity';
 
 /**
  * Membership entity representing a user's participation in a ROSCA group.
@@ -19,10 +10,7 @@ import { User } from '../../users/entities/user.entity';
  */
 @Entity('memberships')
 @Unique(['groupId', 'userId'])
-export class Membership {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
+export class Membership extends BaseEntity {
   @Column('uuid')
   @Index()
   groupId: string;
@@ -59,10 +47,4 @@ export class Membership {
     default: MembershipStatus.ACTIVE,
   })
   status: MembershipStatus;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
 }
