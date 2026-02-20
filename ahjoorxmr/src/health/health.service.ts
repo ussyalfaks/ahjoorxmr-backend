@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { HealthResponseDto, ReadinessResponseDto } from './dto/health-response.dto';
 
 @Injectable()
 export class HealthService {
-  getHealthStatus() {
+  getHealthStatus(): HealthResponseDto {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -12,7 +13,7 @@ export class HealthService {
     };
   }
 
-  getReadinessStatus() {
+  getReadinessStatus(): ReadinessResponseDto {
     // Add any readiness checks here (database connections, external services, etc.)
     return {
       status: 'ready',

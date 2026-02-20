@@ -1,0 +1,707 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/": {
+      "get": {
+        "description": "Returns a simple welcome message from the API",
+        "operationId": "AppController_getHello",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Welcome message retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "example": "Hello World!"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get welcome message",
+        "tags": [
+          "Application"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Returns the current health status of the application including uptime and environment information",
+        "operationId": "HealthController_getHealth",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Health status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get application health status",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "Returns the readiness status including system checks like database connectivity and memory usage",
+        "operationId": "HealthController_getReadiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Readiness status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get application readiness status",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/auth/profile": {
+      "get": {
+        "description": "Returns the authenticated user profile information. Requires valid JWT token.",
+        "operationId": "AuthController_getProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "User profile retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfileDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number",
+                      "example": 401
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Get user profile",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/users": {
+      "get": {
+        "description": "Returns a paginated list of users with optional filtering and sorting. Requires authentication.",
+        "operationId": "UsersController_getUsers",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (default: 1)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (default: 10)",
+            "schema": {
+              "minimum": 1,
+              "default": 10,
+              "example": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Search term for user name or email",
+            "schema": {
+              "example": "john",
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "description": "Field to sort by",
+            "schema": {
+              "example": "createdAt",
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "description": "Sort order",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "description": "Filter by user role",
+            "schema": {
+              "enum": [
+                "admin",
+                "user",
+                "moderator"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Users retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedUsersResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing JWT token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number",
+                      "example": 401
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Get paginated list of users",
+        "tags": [
+          "Users"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Ahjoor Backend API",
+    "description": "A comprehensive backend API for the Ahjoor application",
+    "version": "0.0.1",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "JWT-auth": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http",
+        "name": "JWT",
+        "description": "Enter JWT token",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "InternalServerErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Internal server error message",
+            "example": "Internal server error"
+          },
+          "statusCode": {
+            "type": "number",
+            "description": "HTTP status code for internal server errors",
+            "example": 500
+          },
+          "error": {
+            "type": "string",
+            "description": "Error type for internal server errors",
+            "example": "Internal Server Error"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Request timestamp",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "path": {
+            "type": "string",
+            "description": "Request path",
+            "example": "/api/endpoint"
+          }
+        },
+        "required": [
+          "message",
+          "statusCode",
+          "error",
+          "timestamp",
+          "path"
+        ]
+      },
+      "HealthResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Health status of the application",
+            "example": "ok"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Current timestamp in ISO format",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "uptime": {
+            "type": "number",
+            "description": "Application uptime in seconds",
+            "example": 3600
+          },
+          "environment": {
+            "type": "string",
+            "description": "Current environment",
+            "example": "development"
+          },
+          "version": {
+            "type": "string",
+            "description": "Application version",
+            "example": "0.0.1"
+          }
+        },
+        "required": [
+          "status",
+          "timestamp",
+          "uptime",
+          "environment",
+          "version"
+        ]
+      },
+      "MemoryUsageDto": {
+        "type": "object",
+        "properties": {
+          "rss": {
+            "type": "string",
+            "description": "Resident Set Size memory usage",
+            "example": "50 MB"
+          },
+          "heapTotal": {
+            "type": "string",
+            "description": "Total heap memory",
+            "example": "30 MB"
+          },
+          "heapUsed": {
+            "type": "string",
+            "description": "Used heap memory",
+            "example": "20 MB"
+          },
+          "external": {
+            "type": "string",
+            "description": "External memory usage",
+            "example": "5 MB"
+          }
+        },
+        "required": [
+          "rss",
+          "heapTotal",
+          "heapUsed",
+          "external"
+        ]
+      },
+      "ReadinessChecksDto": {
+        "type": "object",
+        "properties": {
+          "database": {
+            "type": "string",
+            "description": "Database connection status",
+            "example": "ok"
+          },
+          "memory": {
+            "description": "Memory usage information",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MemoryUsageDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "database",
+          "memory"
+        ]
+      },
+      "ReadinessResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Readiness status of the application",
+            "example": "ready"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Current timestamp in ISO format",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "checks": {
+            "description": "Readiness checks results",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessChecksDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "timestamp",
+          "checks"
+        ]
+      },
+      "UserProfileDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User unique identifier",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "name": {
+            "type": "string",
+            "description": "User full name",
+            "example": "John Doe"
+          },
+          "role": {
+            "type": "string",
+            "description": "User role",
+            "example": "user",
+            "enum": [
+              "admin",
+              "user",
+              "moderator"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "Account creation timestamp",
+            "example": "2024-01-01T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "createdAt"
+        ]
+      },
+      "NotFoundErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Not found error message",
+            "example": "Resource not found"
+          },
+          "statusCode": {
+            "type": "number",
+            "description": "HTTP status code for not found errors",
+            "example": 404
+          },
+          "error": {
+            "type": "string",
+            "description": "Error type for not found errors",
+            "example": "Not Found"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Request timestamp",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "path": {
+            "type": "string",
+            "description": "Request path",
+            "example": "/api/endpoint"
+          }
+        },
+        "required": [
+          "message",
+          "statusCode",
+          "error",
+          "timestamp",
+          "path"
+        ]
+      },
+      "UserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User unique identifier",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "name": {
+            "type": "string",
+            "description": "User full name",
+            "example": "John Doe"
+          },
+          "role": {
+            "type": "string",
+            "description": "User role",
+            "example": "user",
+            "enum": [
+              "admin",
+              "user",
+              "moderator"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "Account creation timestamp",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "Last update timestamp",
+            "example": "2024-01-01T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "role",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PaginatedUsersResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "Array of users",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "Total number of users",
+            "example": 100
+          },
+          "page": {
+            "type": "number",
+            "description": "Current page number",
+            "example": 1
+          },
+          "limit": {
+            "type": "number",
+            "description": "Number of items per page",
+            "example": 10
+          },
+          "totalPages": {
+            "type": "number",
+            "description": "Total number of pages",
+            "example": 10
+          }
+        },
+        "required": [
+          "data",
+          "total",
+          "page",
+          "limit",
+          "totalPages"
+        ]
+      },
+      "ValidationErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "description": "Validation error messages",
+            "example": [
+              "field must be a string",
+              "field should not be empty"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "statusCode": {
+            "type": "number",
+            "description": "HTTP status code for validation errors",
+            "example": 400
+          },
+          "error": {
+            "type": "string",
+            "description": "Error type for validation errors",
+            "example": "Bad Request"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Request timestamp",
+            "example": "2024-01-01T00:00:00.000Z"
+          },
+          "path": {
+            "type": "string",
+            "description": "Request path",
+            "example": "/api/endpoint"
+          }
+        },
+        "required": [
+          "message",
+          "statusCode",
+          "error",
+          "timestamp",
+          "path"
+        ]
+      }
+    }
+  }
+}

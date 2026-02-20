@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -35,6 +36,43 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
+
+  // Setup Swagger documentation
+  const isSwaggerEnabled = 
+    process.env.NODE_ENV !== 'production' || 
+    process.env.SWAGGER_ENABLED === 'true';
+
+  if (isSwaggerEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle('Ahjoor Backend API')
+      .setDescription('A comprehensive backend API for the Ahjoor application')
+      .setVersion('0.0.1')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'JWT',
+          description: 'Enter JWT token',
+          in: 'header',
+        },
+        'JWT-auth',
+      )
+      .build();
+
+    const document = SwaggerModule.createDocument(app, config, {
+      operationIdFactory: (controllerKey: string, methodKey: string) => 
+        `${controllerKey}_${methodKey}`,
+    });
+
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+    });
+
+    console.log(`Swagger documentation available at: http://localhost:${process.env.PORT ?? 3000}/api/docs`);
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
