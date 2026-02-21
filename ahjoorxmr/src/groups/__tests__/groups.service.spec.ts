@@ -1,0 +1,450 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import {
+    NotFoundException,
+    BadRequestException,
+    ForbiddenException,
+} from '@nestjs/common';
+import { GroupsService } from '../groups.service';
+import { Group } from '../entities/group.entity';
+import { GroupStatus } from '../entities/group-status.enum';
+import { Membership } from '../../memberships/entities/membership.entity';
+import { MembershipStatus } from '../../memberships/entities/membership-status.enum';
+import { WinstonLogger } from '../../common/logger/winston.logger';
+import { CreateGroupDto } from '../dto/create-group.dto';
+import { UpdateGroupDto } from '../dto/update-group.dto';
+
+// ---------------------------------------------------------------------------
+// Mock factories
+// ---------------------------------------------------------------------------
+
+const BASE_GROUP_ID = '123e4567-e89b-12d3-a456-426614174001';
+const BASE_USER_ID = '123e4567-e89b-12d3-a456-426614174002';
+const ADMIN_WALLET = 'GADMIN1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/**
+ * Factory for creating mock Group entities with sensible defaults.
+ */
+const createMockGroup = (overrides: Partial<Group> = {}): Group => ({
+    id: BASE_GROUP_ID,
+    name: 'Test ROSCA Group',
+    contractAddress: null,
+    adminWallet: ADMIN_WALLET,
+    contributionAmount: '100',
+    token: 'USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+    roundDuration: 2592000,
+    status: GroupStatus.PENDING,
+    currentRound: 0,
+    totalRounds: 10,
+    memberships: [],
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    updatedAt: new Date('2024-01-01T00:00:00Z'),
+    ...overrides,
+});
+
+/**
+ * Factory for creating mock Membership entities with sensible defaults.
+ */
+const createMockMembership = (overrides: Partial<Membership> = {}): Membership => ({
+    id: '123e4567-e89b-12d3-a456-426614174099',
+    groupId: BASE_GROUP_ID,
+    userId: BASE_USER_ID,
+    walletAddress: 'GMEMBER1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    payoutOrder: 0,
+    hasReceivedPayout: false,
+    hasPaidCurrentRound: false,
+    status: MembershipStatus.ACTIVE,
+    group: createMockGroup(),
+    user: null,
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    updatedAt: new Date('2024-01-01T00:00:00Z'),
+    ...overrides,
+});
+
+// ---------------------------------------------------------------------------
+// Repository + Logger mock types
+// ---------------------------------------------------------------------------
+
+type MockRepository<T = any> = Partial<Record<keyof Repository<T>, jest.Mock>>;
+
+const createMockRepository = <T = any>(): MockRepository<T> => ({
+    create: jest.fn(),
+    save: jest.fn(),
+    findOne: jest.fn(),
+    find: jest.fn(),
+    findAndCount: jest.fn(),
+});
+
+type MockLogger = Partial<Record<keyof WinstonLogger, jest.Mock>>;
+
+const createMockLogger = (): MockLogger => ({
+    log: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    verbose: jest.fn(),
+});
+
+// ---------------------------------------------------------------------------
+// Test suite
+// ---------------------------------------------------------------------------
+
+describe('GroupsService', () => {
+    let service: GroupsService;
+    let groupRepository: MockRepository<Group>;
+    let membershipRepository: MockRepository<Membership>;
+    let logger: MockLogger;
+
+    beforeEach(async () => {
+        groupRepository = createMockRepository<Group>();
+        membershipRepository = createMockRepository<Membership>();
+        logger = createMockLogger();
+
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                GroupsService,
+                {
+                    provide: getRepositoryToken(Group),
+                    useValue: groupRepository,
+                },
+                {
+                    provide: getRepositoryToken(Membership),
+                    useValue: membershipRepository,
+                },
+                {
+                    provide: WinstonLogger,
+                    useValue: logger,
+                },
+            ],
+        }).compile();
+
+        service = module.get<GroupsService>(GroupsService);
+    });
+
+    afterEach(() => {
+        jest.clearAllMocks();
+    });
+
+    // -------------------------------------------------------------------------
+    // Service Initialization
+    // -------------------------------------------------------------------------
+
+    describe('Service Initialization', () => {
+        it('should be defined', () => {
+            expect(service).toBeDefined();
+        });
+
+        it('should have groupRepository injected', () => {
+            expect(groupRepository).toBeDefined();
+        });
+
+        it('should have membershipRepository injected', () => {
+            expect(membershipRepository).toBeDefined();
+        });
+
+        it('should have logger injected', () => {
+            expect(logger).toBeDefined();
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // createGroup
+    // -------------------------------------------------------------------------
+
+    describe('createGroup', () => {
+        const dto: CreateGroupDto = {
+            name: 'My ROSCA',
+            adminWallet: ADMIN_WALLET,
+            contributionAmount: '50',
+            token: 'USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
+            roundDuration: 2592000,
+            totalRounds: 12,
+        };
+
+        it('should create and return a PENDING group', async () => {
+            const mockGroup = createMockGroup({
+                name: dto.name,
+                contributionAmount: dto.contributionAmount,
+                totalRounds: dto.totalRounds,
+            });
+
+            groupRepository.create!.mockReturnValue(mockGroup);
+            groupRepository.save!.mockResolvedValue(mockGroup);
+
+            const result = await service.createGroup(dto, ADMIN_WALLET);
+
+            expect(groupRepository.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    status: GroupStatus.PENDING,
+                    currentRound: 0,
+                    adminWallet: ADMIN_WALLET,
+                    contractAddress: null,
+                }),
+            );
+            expect(groupRepository.save).toHaveBeenCalledWith(mockGroup);
+            expect(result.status).toBe(GroupStatus.PENDING);
+            expect(result.currentRound).toBe(0);
+        });
+
+        it('should set contractAddress to null when not provided', async () => {
+            const mockGroup = createMockGroup({ contractAddress: null });
+            groupRepository.create!.mockReturnValue(mockGroup);
+            groupRepository.save!.mockResolvedValue(mockGroup);
+
+            await service.createGroup(dto, ADMIN_WALLET);
+
+            expect(groupRepository.create).toHaveBeenCalledWith(
+                expect.objectContaining({ contractAddress: null }),
+            );
+        });
+
+        it('should set contractAddress when provided in dto', async () => {
+            const contractAddress = 'CCONTRACT1234567890';
+            const dtoWithContract = { ...dto, contractAddress };
+            const mockGroup = createMockGroup({ contractAddress });
+            groupRepository.create!.mockReturnValue(mockGroup);
+            groupRepository.save!.mockResolvedValue(mockGroup);
+
+            await service.createGroup(dtoWithContract, ADMIN_WALLET);
+
+            expect(groupRepository.create).toHaveBeenCalledWith(
+                expect.objectContaining({ contractAddress }),
+            );
+        });
+
+        it('should log the creation', async () => {
+            const mockGroup = createMockGroup();
+            groupRepository.create!.mockReturnValue(mockGroup);
+            groupRepository.save!.mockResolvedValue(mockGroup);
+
+            await service.createGroup(dto, ADMIN_WALLET);
+
+            expect(logger.log).toHaveBeenCalledTimes(2);
+        });
+
+        it('should propagate unexpected errors', async () => {
+            groupRepository.create!.mockReturnValue({});
+            groupRepository.save!.mockRejectedValue(new Error('DB failure'));
+
+            await expect(service.createGroup(dto, ADMIN_WALLET)).rejects.toThrow(
+                'DB failure',
+            );
+            expect(logger.error).toHaveBeenCalled();
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // findAll
+    // -------------------------------------------------------------------------
+
+    describe('findAll', () => {
+        it('should return a paginated result with default page and limit', async () => {
+            const mockGroups = [createMockGroup(), createMockGroup({ id: 'other-id' })];
+            groupRepository.findAndCount!.mockResolvedValue([mockGroups, 2]);
+
+            const result = await service.findAll(1, 10);
+
+            expect(groupRepository.findAndCount).toHaveBeenCalledWith(
+                expect.objectContaining({ skip: 0, take: 10 }),
+            );
+            expect(result.data).toHaveLength(2);
+            expect(result.total).toBe(2);
+            expect(result.page).toBe(1);
+            expect(result.limit).toBe(10);
+        });
+
+        it('should calculate correct skip for page 2', async () => {
+            groupRepository.findAndCount!.mockResolvedValue([[], 0]);
+
+            await service.findAll(2, 5);
+
+            expect(groupRepository.findAndCount).toHaveBeenCalledWith(
+                expect.objectContaining({ skip: 5, take: 5 }),
+            );
+        });
+
+        it('should return empty data when no groups exist', async () => {
+            groupRepository.findAndCount!.mockResolvedValue([[], 0]);
+
+            const result = await service.findAll();
+
+            expect(result.data).toHaveLength(0);
+            expect(result.total).toBe(0);
+        });
+
+        it('should order by createdAt DESC', async () => {
+            groupRepository.findAndCount!.mockResolvedValue([[], 0]);
+
+            await service.findAll();
+
+            expect(groupRepository.findAndCount).toHaveBeenCalledWith(
+                expect.objectContaining({ order: { createdAt: 'DESC' } }),
+            );
+        });
+
+        it('should propagate errors', async () => {
+            groupRepository.findAndCount!.mockRejectedValue(new Error('DB error'));
+
+            await expect(service.findAll()).rejects.toThrow('DB error');
+            expect(logger.error).toHaveBeenCalled();
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // findOne
+    // -------------------------------------------------------------------------
+
+    describe('findOne', () => {
+        it('should return the group with memberships included', async () => {
+            const mockGroup = createMockGroup({
+                memberships: [createMockMembership()],
+            });
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+            const result = await service.findOne(BASE_GROUP_ID);
+
+            expect(groupRepository.findOne).toHaveBeenCalledWith({
+                where: { id: BASE_GROUP_ID },
+                relations: ['memberships'],
+            });
+            expect(result.id).toBe(BASE_GROUP_ID);
+            expect(result.memberships).toHaveLength(1);
+        });
+
+        it('should throw NotFoundException when group does not exist', async () => {
+            groupRepository.findOne!.mockResolvedValue(null);
+
+            await expect(service.findOne('non-existent-id')).rejects.toThrow(
+                NotFoundException,
+            );
+            expect(logger.warn).toHaveBeenCalled();
+        });
+
+        it('should propagate unexpected errors', async () => {
+            groupRepository.findOne!.mockRejectedValue(new Error('DB error'));
+
+            await expect(service.findOne(BASE_GROUP_ID)).rejects.toThrow('DB error');
+            expect(logger.error).toHaveBeenCalled();
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // update
+    // -------------------------------------------------------------------------
+
+    describe('update', () => {
+        const updateDto: UpdateGroupDto = { name: 'Updated Name' };
+
+        it('should update and return the group when PENDING', async () => {
+            const mockGroup = createMockGroup({ status: GroupStatus.PENDING });
+            const updatedGroup = { ...mockGroup, name: 'Updated Name' } as Group;
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+            groupRepository.save!.mockResolvedValue(updatedGroup);
+
+            const result = await service.update(BASE_GROUP_ID, updateDto, ADMIN_WALLET);
+
+            expect(groupRepository.save).toHaveBeenCalled();
+            expect(result.name).toBe('Updated Name');
+        });
+
+        it('should throw NotFoundException when group does not exist', async () => {
+            groupRepository.findOne!.mockResolvedValue(null);
+
+            await expect(
+                service.update('non-existent-id', updateDto, ADMIN_WALLET),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw ForbiddenException when requester is not the admin', async () => {
+            const mockGroup = createMockGroup({ adminWallet: ADMIN_WALLET });
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+            await expect(
+                service.update(BASE_GROUP_ID, updateDto, 'GDIFFERENT_WALLET'),
+            ).rejects.toThrow(ForbiddenException);
+        });
+
+        it('should throw BadRequestException when group is ACTIVE', async () => {
+            const mockGroup = createMockGroup({ status: GroupStatus.ACTIVE });
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+            await expect(
+                service.update(BASE_GROUP_ID, updateDto, ADMIN_WALLET),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should throw BadRequestException when group is COMPLETED', async () => {
+            const mockGroup = createMockGroup({ status: GroupStatus.COMPLETED });
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+            await expect(
+                service.update(BASE_GROUP_ID, updateDto, ADMIN_WALLET),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should propagate unexpected errors', async () => {
+            groupRepository.findOne!.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.update(BASE_GROUP_ID, updateDto, ADMIN_WALLET),
+            ).rejects.toThrow('DB error');
+            expect(logger.error).toHaveBeenCalled();
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // findMyGroups
+    // -------------------------------------------------------------------------
+
+    describe('findMyGroups', () => {
+        it('should return groups for which user has memberships', async () => {
+            const mockGroup = createMockGroup();
+            const mockMembership = createMockMembership({ group: mockGroup });
+            membershipRepository.find!.mockResolvedValue([mockMembership]);
+
+            const result = await service.findMyGroups(BASE_USER_ID);
+
+            expect(membershipRepository.find).toHaveBeenCalledWith({
+                where: { userId: BASE_USER_ID },
+                relations: ['group'],
+            });
+            expect(result).toHaveLength(1);
+            expect(result[0].id).toBe(BASE_GROUP_ID);
+        });
+
+        it('should return an empty array when user has no memberships', async () => {
+            membershipRepository.find!.mockResolvedValue([]);
+
+            const result = await service.findMyGroups(BASE_USER_ID);
+
+            expect(result).toHaveLength(0);
+        });
+
+        it('should filter out memberships with null groups', async () => {
+            const membership = createMockMembership({ group: null });
+            membershipRepository.find!.mockResolvedValue([membership]);
+
+            const result = await service.findMyGroups(BASE_USER_ID);
+
+            expect(result).toHaveLength(0);
+        });
+
+        it('should log the operation', async () => {
+            membershipRepository.find!.mockResolvedValue([]);
+
+            await service.findMyGroups(BASE_USER_ID);
+
+            expect(logger.log).toHaveBeenCalledTimes(2);
+        });
+
+        it('should propagate errors', async () => {
+            membershipRepository.find!.mockRejectedValue(new Error('DB error'));
+
+            await expect(service.findMyGroups(BASE_USER_ID)).rejects.toThrow(
+                'DB error',
+            );
+            expect(logger.error).toHaveBeenCalled();
+        });
+    });
+});
