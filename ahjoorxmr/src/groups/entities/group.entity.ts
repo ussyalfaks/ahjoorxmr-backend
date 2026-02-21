@@ -9,4 +9,7 @@ import { BaseEntity } from '../../common/entities/base.entity';
 export class Group extends BaseEntity {
   @Column('varchar')
   status: string;
+
+  @Column('int', { default: 1 })
+  currentRound: number;
 }

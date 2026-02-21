@@ -12,17 +12,11 @@ import { Membership } from './memberships/entities/membership.entity';
 import { Group } from './groups/entities/group.entity';
 import { User } from './users/entities/user.entity';
 import { Contribution } from './contributions/entities/contribution.entity';
+import { StellarModule } from './stellar/stellar.module';
+import { EventListenerModule } from './event-listener/event-listener.module';
 
 @Module({
   imports: [
-    // TypeORM configuration with SQLite for development
-    // For production, replace with PostgreSQL configuration using environment variables
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: ':memory:', // In-memory database for development
-      entities: [Membership, Group, User, Contribution],
-      synchronize: true, // Auto-create tables (disable in production)
-      logging: false,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -39,7 +33,7 @@ import { Contribution } from './contributions/entities/contribution.entity';
           username: configService.get<string>('DB_USERNAME') || 'postgres',
           password: configService.get<string>('DB_PASSWORD') || 'postgres',
           database: configService.get<string>('DB_NAME') || 'ahjoorxmr',
-          entities: [Membership, Group, User],
+          entities: [Membership, Group, User, Contribution],
           synchronize: isDevelopment, // Auto-create tables only in development
           logging: isDevelopment, // Enable logging only in development
         };
@@ -51,6 +45,8 @@ import { Contribution } from './contributions/entities/contribution.entity';
     UsersModule,
     MembershipsModule,
     ContributionsModule,
+    StellarModule,
+    EventListenerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
