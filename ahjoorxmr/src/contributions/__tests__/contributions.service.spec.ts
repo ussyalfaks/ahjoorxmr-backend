@@ -31,9 +31,11 @@ describe('ContributionsService', () => {
     const createContributionDto: CreateContributionDto = {
         groupId: 'group-1',
         userId: 'user-1',
+        walletAddress: 'G123',
         transactionHash: '0x123',
         amount: '100',
         roundNumber: 1,
+        timestamp: new Date(),
     };
 
     beforeEach(async () => {
@@ -41,6 +43,7 @@ describe('ContributionsService', () => {
             findOne: jest.fn(),
             create: jest.fn(),
             save: jest.fn(),
+            findAndCount: jest.fn(),
         };
         groupRepository = {
             findOne: jest.fn(),
@@ -145,6 +148,71 @@ describe('ContributionsService', () => {
             await expect(service.createContribution(createContributionDto)).rejects.toThrow(
                 BadRequestException,
             );
+        });
+    });
+
+    describe('getGroupContributions', () => {
+        it('should return paginated contributions with default values', async () => {
+            const mockResult = [[mockContribution], 1];
+            contributionRepository.findAndCount!.mockResolvedValue(mockResult);
+
+            const result = await service.getGroupContributions('group-1', {});
+
+            expect(result.data).toEqual([mockContribution]);
+            expect(result.total).toBe(1);
+            expect(result.page).toBe(1);
+            expect(result.limit).toBe(20);
+            expect(result.totalPages).toBe(1);
+            expect(contributionRepository.findAndCount).toHaveBeenCalledWith({
+                where: { groupId: 'group-1' },
+                order: { timestamp: 'DESC' },
+                skip: 0,
+                take: 20,
+            });
+        });
+
+        it('should apply pagination and sorting correctly', async () => {
+            const mockResult = [[mockContribution], 1];
+            contributionRepository.findAndCount!.mockResolvedValue(mockResult);
+
+            const query = {
+                page: 2,
+                limit: 10,
+                sortBy: 'amount',
+                sortOrder: 'ASC' as const,
+            };
+
+            await service.getGroupContributions('group-1', query);
+
+            expect(contributionRepository.findAndCount).toHaveBeenCalledWith({
+                where: { groupId: 'group-1' },
+                order: { amount: 'ASC' },
+                skip: 10,
+                take: 10,
+            });
+        });
+
+        it('should filter by round and walletAddress', async () => {
+            const mockResult = [[mockContribution], 1];
+            contributionRepository.findAndCount!.mockResolvedValue(mockResult);
+
+            const query = {
+                round: 2,
+                walletAddress: 'G123',
+            };
+
+            await service.getGroupContributions('group-1', query);
+
+            expect(contributionRepository.findAndCount).toHaveBeenCalledWith({
+                where: {
+                    groupId: 'group-1',
+                    roundNumber: 2,
+                    walletAddress: 'G123',
+                },
+                order: { timestamp: 'DESC' },
+                skip: 0,
+                take: 20,
+            });
         });
     });
 });

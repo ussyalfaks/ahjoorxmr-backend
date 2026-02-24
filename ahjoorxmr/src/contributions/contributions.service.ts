@@ -7,6 +7,7 @@ import { WinstonLogger } from '../common/logger/winston.logger';
 import { CreateContributionDto } from './dto/create-contribution.dto';
 import { StellarService } from '../stellar/stellar.service';
 import { ConfigService } from '@nestjs/config';
+import { GetContributionsQueryDto } from './dto/get-contributions-query.dto';
 
 /**
  * Service responsible for managing contribution operations in ROSCA groups.
@@ -151,16 +152,20 @@ export class ContributionsService {
   }
 
   /**
-   * Retrieves all contributions for a specific group.
-   * Optionally filters by round number.
+   * Retrieves all contributions for a specific group with pagination, sorting, and filtering.
    *
    * @param groupId - The UUID of the group
-   * @param round - Optional round number to filter by
-   * @returns Array of Contribution entities (empty if none found)
+   * @param query - The pagination and filter query parameters
+   * @returns Paginated envelope containing contribution entities
    */
-  async getGroupContributions(groupId: string, round?: number): Promise<Contribution[]> {
+  async getGroupContributions(
+    groupId: string,
+    query: GetContributionsQueryDto,
+  ): Promise<{ data: Contribution[]; total: number; page: number; limit: number; totalPages: number }> {
+    const { page = 1, limit = 20, round, walletAddress, sortBy = 'timestamp', sortOrder = 'DESC' } = query;
+
     this.logger.log(
-      `Querying contributions for group ${groupId}${round ? ` and round ${round}` : ''}`,
+      `Querying contributions for group ${groupId} with pagination: page=${page}, limit=${limit}, sortBy=${sortBy}, sortOrder=${sortOrder}${round ? `, round=${round}` : ''}${walletAddress ? `, walletAddress=${walletAddress}` : ''}`,
       'ContributionsService',
     );
 
@@ -170,17 +175,31 @@ export class ContributionsService {
       whereClause.roundNumber = round;
     }
 
-    const contributions = await this.contributionRepository.find({
+    if (walletAddress) {
+      whereClause.walletAddress = walletAddress;
+    }
+
+    const [data, total] = await this.contributionRepository.findAndCount({
       where: whereClause,
-      order: { timestamp: 'DESC' },
+      order: { [sortBy]: sortOrder },
+      skip: (page - 1) * limit,
+      take: limit,
     });
 
+    const totalPages = Math.ceil(total / limit);
+
     this.logger.log(
-      `Found ${contributions.length} contribution(s) for group ${groupId}${round ? ` and round ${round}` : ''}`,
+      `Found ${data.length} contribution(s) (total ${total}) for group ${groupId}`,
       'ContributionsService',
     );
 
-    return contributions;
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   /**
