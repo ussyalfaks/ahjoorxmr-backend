@@ -1,4 +1,5 @@
 import { Controller, Post, Get, HttpCode, HttpStatus, Param, Body, Query, UseGuards, ParseUUIDPipe, ParseIntPipe, Request } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ContributionsService } from './contributions.service';
 import { CreateContributionDto } from './dto/create-contribution.dto';
 import { ContributionResponseDto } from './dto/contribution-response.dto';
@@ -16,6 +17,7 @@ export class ContributionsController {
   /**
    * Creates a new contribution record (internal endpoint).
    * Protected by API key authentication for system-to-system communication.
+   * Rate limited to 10 requests per minute for payment security.
    *
    * @param createContributionDto - The contribution data
    * @returns The created contribution with HTTP 201 status
@@ -25,6 +27,7 @@ export class ContributionsController {
    */
   @Post('internal/contributions')
   @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   @HttpCode(HttpStatus.CREATED)
   async createContribution(
     @Body() createContributionDto: CreateContributionDto,

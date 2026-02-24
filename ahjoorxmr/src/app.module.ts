@@ -18,6 +18,7 @@ import { Contribution } from './contributions/entities/contribution.entity';
 import { AuditLog } from './scheduler/entities/audit-log.entity';
 import { StellarModule } from './stellar/stellar.module';
 import { EventListenerModule } from './event-listener/event-listener.module';
+import { CustomThrottlerModule } from './throttler/throttler.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { EventListenerModule } from './event-listener/event-listener.module';
     }),
     // RedisModule for caching and session management
     RedisModule,
+    CustomThrottlerModule,
     SchedulerModule,
     HealthModule,
     AuthModule,
