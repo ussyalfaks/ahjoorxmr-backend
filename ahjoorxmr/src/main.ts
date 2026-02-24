@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -6,11 +6,16 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { WinstonLogger } from './common/logger/winston.logger';
+import { CustomThrottlerGuard } from './throttler/guards/custom-throttler.guard';
+import { RateLimitHeadersInterceptor } from './throttler/interceptors/rate-limit-headers.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new WinstonLogger(),
   });
+
+  // Get Reflector for guards
+  const reflector = app.get(Reflector);
 
   // Global pipes
   app.useGlobalPipes(
@@ -21,6 +26,9 @@ async function bootstrap() {
     }),
   );
 
+  // Global guards
+  app.useGlobalGuards(new CustomThrottlerGuard({ reflector }));
+
   // Global filters
   app.useGlobalFilters(new HttpExceptionFilter());
 
@@ -28,6 +36,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
     new TransformInterceptor(),
+    new RateLimitHeadersInterceptor(),
   );
 
   // Enable CORS

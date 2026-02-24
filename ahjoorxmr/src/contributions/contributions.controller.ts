@@ -1,7 +1,9 @@
 import { Controller, Post, Get, HttpCode, HttpStatus, Param, Body, Query, UseGuards, ParseUUIDPipe, ParseIntPipe, Request } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ContributionsService } from './contributions.service';
 import { CreateContributionDto } from './dto/create-contribution.dto';
 import { ContributionResponseDto } from './dto/contribution-response.dto';
+import { GetContributionsQueryDto } from './dto/get-contributions-query.dto';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -11,11 +13,12 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
  */
 @Controller('api/v1')
 export class ContributionsController {
-  constructor(private readonly contributionsService: ContributionsService) {}
+  constructor(private readonly contributionsService: ContributionsService) { }
 
   /**
    * Creates a new contribution record (internal endpoint).
    * Protected by API key authentication for system-to-system communication.
+   * Rate limited to 10 requests per minute for payment security.
    *
    * @param createContributionDto - The contribution data
    * @returns The created contribution with HTTP 201 status
@@ -25,6 +28,7 @@ export class ContributionsController {
    */
   @Post('internal/contributions')
   @UseGuards(ApiKeyGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   @HttpCode(HttpStatus.CREATED)
   async createContribution(
     @Body() createContributionDto: CreateContributionDto,
@@ -49,38 +53,40 @@ export class ContributionsController {
   }
 
   /**
-   * Retrieves all contributions for a specific group.
-   * Optionally filters by round number via query parameter.
+   * Retrieves all contributions for a specific group with pagination, sorting, and filtering.
    *
    * @param groupId - The UUID of the group
-   * @param round - Optional round number to filter by
-   * @returns Array of contributions for the group
-   * @throws BadRequestException if groupId is not a valid UUID or round is invalid
+   * @param query - The pagination and filter query parameters
+   * @returns Paginated envelope containing contributions for the group
+   * @throws BadRequestException if groupId is not a valid UUID
    * @throws NotFoundException if the group doesn't exist
    */
   @Get('groups/:id/contributions')
   async getGroupContributions(
     @Param('id', ParseUUIDPipe) groupId: string,
-    @Query('round', new ParseIntPipe({ optional: true })) round?: number,
-  ): Promise<ContributionResponseDto[]> {
-    const contributions = await this.contributionsService.getGroupContributions(
+    @Query() query: GetContributionsQueryDto,
+  ): Promise<{ data: ContributionResponseDto[]; total: number; page: number; limit: number; totalPages: number }> {
+    const result = await this.contributionsService.getGroupContributions(
       groupId,
-      round,
+      query,
     );
 
     // Transform entities to response DTOs with ISO date strings
-    return contributions.map((contribution) => ({
-      id: contribution.id,
-      groupId: contribution.groupId,
-      userId: contribution.userId,
-      walletAddress: contribution.walletAddress,
-      roundNumber: contribution.roundNumber,
-      amount: contribution.amount,
-      transactionHash: contribution.transactionHash,
-      timestamp: contribution.timestamp.toISOString(),
-      createdAt: contribution.createdAt.toISOString(),
-      updatedAt: contribution.updatedAt.toISOString(),
-    }));
+    return {
+      ...result,
+      data: result.data.map((contribution) => ({
+        id: contribution.id,
+        groupId: contribution.groupId,
+        userId: contribution.userId,
+        walletAddress: contribution.walletAddress,
+        roundNumber: contribution.roundNumber,
+        amount: contribution.amount,
+        transactionHash: contribution.transactionHash,
+        timestamp: contribution.timestamp.toISOString(),
+        createdAt: contribution.createdAt.toISOString(),
+        updatedAt: contribution.updatedAt.toISOString(),
+      })),
+    };
   }
 
   /**

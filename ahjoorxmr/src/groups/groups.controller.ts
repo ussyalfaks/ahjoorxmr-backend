@@ -138,6 +138,30 @@ export class GroupsController {
     }
 
     /**
+     * Activates a PENDING group if all conditions are met.
+     * Only the group admin can activate the group.
+     * The group must have enough members to meet the minimum requirement.
+     *
+     * @param req - Authenticated request object
+     * @param id - The UUID of the group to activate
+     * @returns The updated group with status ACTIVE
+     * @throws NotFoundException if the group doesn't exist
+     * @throws ForbiddenException if not the group admin
+     * @throws BadRequestException if the group is not PENDING or doesn't have enough members
+     */
+    @Post(':id/activate')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async activateGroup(
+        @Request() req: { user: { id: string; walletAddress: string } },
+        @Param('id', ParseUUIDPipe) id: string,
+    ): Promise<GroupResponseDto> {
+        const adminWallet = req.user.walletAddress || req.user.id;
+        const group = await this.groupsService.activateGroup(id, adminWallet);
+        return this.toGroupResponse(group);
+    }
+
+    /**
      * Maps a Group entity to a GroupResponseDto.
      * @param group - The group entity
      * @param includeMembers - Whether to include the memberships array

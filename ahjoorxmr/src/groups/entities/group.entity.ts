@@ -44,11 +44,9 @@ export class Group extends BaseEntity {
   @Column('int')
   totalRounds: number;
 
+  @Column('int')
+  minMembers: number;
+
   @OneToMany(() => Membership, (membership) => membership.group)
   memberships: Membership[];
-  @Column('varchar')
-  status: string;
-
-  @Column('int', { default: 1 })
-  currentRound: number;
 }

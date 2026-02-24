@@ -37,6 +37,7 @@ const createMockGroup = (overrides: Partial<Group> = {}): Group => ({
     status: GroupStatus.PENDING,
     currentRound: 0,
     totalRounds: 10,
+    minMembers: 3,
     memberships: [],
     createdAt: new Date('2024-01-01T00:00:00Z'),
     updatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -444,6 +445,201 @@ describe('GroupsService', () => {
             await expect(service.findMyGroups(BASE_USER_ID)).rejects.toThrow(
                 'DB error',
             );
+            expect(logger.error).toHaveBeenCalled();
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // activateGroup
+    // -------------------------------------------------------------------------
+
+    describe('activateGroup', () => {
+        const groupId = BASE_GROUP_ID;
+        const adminWallet = ADMIN_WALLET;
+
+        it('should activate a PENDING group with enough members (happy path)', async () => {
+            const mockGroup = createMockGroup({
+                status: GroupStatus.PENDING,
+                currentRound: 0,
+                minMembers: 3,
+                memberships: [
+                    createMockMembership({ id: 'member-1' }),
+                    createMockMembership({ id: 'member-2' }),
+                    createMockMembership({ id: 'member-3' }),
+                ],
+            });
+
+            const activatedGroup = {
+                ...mockGroup,
+                status: GroupStatus.ACTIVE,
+                currentRound: 1,
+            } as Group;
+
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+            groupRepository.save!.mockResolvedValue(activatedGroup);
+
+            const result = await service.activateGroup(groupId, adminWallet);
+
+            expect(groupRepository.findOne).toHaveBeenCalledWith({
+                where: { id: groupId },
+                relations: ['memberships'],
+            });
+            expect(groupRepository.save).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    status: GroupStatus.ACTIVE,
+                    currentRound: 1,
+                }),
+            );
+            expect(result.status).toBe(GroupStatus.ACTIVE);
+            expect(result.currentRound).toBe(1);
+            expect(logger.log).toHaveBeenCalledWith(
+                expect.stringContaining('activated successfully'),
+                'GroupsService',
+            );
+        });
+
+        it('should throw NotFoundException when group does not exist', async () => {
+            groupRepository.findOne!.mockResolvedValue(null);
+
+            await expect(
+                service.activateGroup('non-existent-id', adminWallet),
+            ).rejects.toThrow(NotFoundException);
+            await expect(
+                service.activateGroup('non-existent-id', adminWallet),
+            ).rejects.toThrow('Group not found');
+            expect(logger.warn).toHaveBeenCalled();
+        });
+
+        it('should throw ForbiddenException when caller is not the admin', async () => {
+            const mockGroup = createMockGroup({
+                adminWallet: ADMIN_WALLET,
+                status: GroupStatus.PENDING,
+                minMembers: 2,
+                memberships: [
+                    createMockMembership({ id: 'member-1' }),
+                    createMockMembership({ id: 'member-2' }),
+                ],
+            });
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+            const differentWallet = 'GDIFFERENT_WALLET_ADDRESS';
+
+            await expect(
+                service.activateGroup(groupId, differentWallet),
+            ).rejects.toThrow(ForbiddenException);
+            await expect(
+                service.activateGroup(groupId, differentWallet),
+            ).rejects.toThrow('Only the group admin can activate this group');
+            expect(logger.warn).toHaveBeenCalled();
+        });
+
+        it('should throw BadRequestException when group status is not PENDING', async () => {
+            const mockGroup = createMockGroup({
+                status: GroupStatus.ACTIVE,
+                minMembers: 2,
+                memberships: [
+                    createMockMembership({ id: 'member-1' }),
+                    createMockMembership({ id: 'member-2' }),
+                ],
+            });
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+            await expect(
+                service.activateGroup(groupId, adminWallet),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.activateGroup(groupId, adminWallet),
+            ).rejects.toThrow('Group is not in a pending state');
+            expect(logger.warn).toHaveBeenCalled();
+        });
+
+        it('should throw BadRequestException when group is COMPLETED', async () => {
+            const mockGroup = createMockGroup({
+                status: GroupStatus.COMPLETED,
+                minMembers: 2,
+                memberships: [
+                    createMockMembership({ id: 'member-1' }),
+                    createMockMembership({ id: 'member-2' }),
+                ],
+            });
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+            await expect(
+                service.activateGroup(groupId, adminWallet),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.activateGroup(groupId, adminWallet),
+            ).rejects.toThrow('Group is not in a pending state');
+        });
+
+        it('should throw BadRequestException when group does not have enough members', async () => {
+            const mockGroup = createMockGroup({
+                status: GroupStatus.PENDING,
+                minMembers: 5,
+                memberships: [
+                    createMockMembership({ id: 'member-1' }),
+                    createMockMembership({ id: 'member-2' }),
+                ],
+            });
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+            await expect(
+                service.activateGroup(groupId, adminWallet),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.activateGroup(groupId, adminWallet),
+            ).rejects.toThrow('Group does not have enough members');
+            expect(logger.warn).toHaveBeenCalled();
+        });
+
+        it('should throw BadRequestException when group has zero members', async () => {
+            const mockGroup = createMockGroup({
+                status: GroupStatus.PENDING,
+                minMembers: 1,
+                memberships: [],
+            });
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+            await expect(
+                service.activateGroup(groupId, adminWallet),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.activateGroup(groupId, adminWallet),
+            ).rejects.toThrow('Group does not have enough members');
+        });
+
+        it('should handle group with exactly minMembers count', async () => {
+            const mockGroup = createMockGroup({
+                status: GroupStatus.PENDING,
+                currentRound: 0,
+                minMembers: 2,
+                memberships: [
+                    createMockMembership({ id: 'member-1' }),
+                    createMockMembership({ id: 'member-2' }),
+                ],
+            });
+
+            const activatedGroup = {
+                ...mockGroup,
+                status: GroupStatus.ACTIVE,
+                currentRound: 1,
+            } as Group;
+
+            groupRepository.findOne!.mockResolvedValue(mockGroup);
+            groupRepository.save!.mockResolvedValue(activatedGroup);
+
+            const result = await service.activateGroup(groupId, adminWallet);
+
+            expect(result.status).toBe(GroupStatus.ACTIVE);
+            expect(result.currentRound).toBe(1);
+        });
+
+        it('should propagate unexpected errors', async () => {
+            groupRepository.findOne!.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.activateGroup(groupId, adminWallet),
+            ).rejects.toThrow('DB error');
             expect(logger.error).toHaveBeenCalled();
         });
     });

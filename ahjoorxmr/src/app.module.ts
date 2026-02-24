@@ -9,15 +9,34 @@ import { UsersModule } from './users/users.module';
 import { GroupsModule } from './groups/groups.module';
 import { MembershipsModule } from './memberships/memberships.module';
 import { ContributionsModule } from './contributions/contributions.module';
+import { RedisModule } from './common/redis/redis.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 import { Membership } from './memberships/entities/membership.entity';
 import { Group } from './groups/entities/group.entity';
 import { User } from './users/entities/user.entity';
 import { Contribution } from './contributions/entities/contribution.entity';
+import { AuditLog } from './scheduler/entities/audit-log.entity';
 import { StellarModule } from './stellar/stellar.module';
 import { EventListenerModule } from './event-listener/event-listener.module';
+import { CustomThrottlerModule } from './throttler/throttler.module';
 
 @Module({
   imports: [
+
+    // ConfigModule must be first to make environment variables available
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    // TypeORM configuration with SQLite for development
+    // For production, replace with PostgreSQL configuration using environment variables
+    TypeOrmModule.forRoot({
+      type: 'sqlite',
+      database: ':memory:', // In-memory database for development
+      entities: [Membership, Group, User, Contribution],
+      synchronize: true, // Auto-create tables (disable in production)
+      logging: false,
+=======
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -36,7 +55,7 @@ import { EventListenerModule } from './event-listener/event-listener.module';
           password:
             configService.get<string>('DB_PASSWORD') || 'postgres',
           database: configService.get<string>('DB_NAME') || 'ahjoorxmr',
-          entities: [Membership, Group, User, Contribution],
+          entities: [Membership, Group, User, Contribution, AuditLog],
 
           synchronize: isDevelopment,
           logging: isDevelopment,
@@ -46,6 +65,10 @@ import { EventListenerModule } from './event-listener/event-listener.module';
       },
       inject: [ConfigService],
     }),
+    // RedisModule for caching and session management
+    RedisModule,
+    CustomThrottlerModule,
+    SchedulerModule,
     HealthModule,
     AuthModule,
     UsersModule,

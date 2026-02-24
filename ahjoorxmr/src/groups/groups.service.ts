@@ -253,4 +253,101 @@ export class GroupsService {
             throw error;
         }
     }
+
+    /**
+     * Activates a PENDING group if all conditions are met.
+     * Only the group admin can activate the group.
+     * The group must have enough members to meet the minimum requirement.
+     *
+     * @param groupId - The UUID of the group to activate
+     * @param adminWallet - Wallet address of the requesting admin
+     * @returns The updated Group entity with status ACTIVE
+     * @throws NotFoundException if the group doesn't exist
+     * @throws ForbiddenException if the requester is not the group admin
+     * @throws BadRequestException if the group is not PENDING or doesn't have enough members
+     */
+    async activateGroup(groupId: string, adminWallet: string): Promise<Group> {
+        this.logger.log(
+            `Activating group ${groupId} by admin ${adminWallet}`,
+            'GroupsService',
+        );
+
+        try {
+            // 1. Fetch group by ID
+            const group = await this.groupRepository.findOne({
+                where: { id: groupId },
+                relations: ['memberships'],
+            });
+
+            if (!group) {
+                this.logger.warn(`Group ${groupId} not found`, 'GroupsService');
+                throw new NotFoundException('Group not found');
+            }
+
+            // 2. Check adminWallet === group.adminWallet
+            if (group.adminWallet !== adminWallet) {
+                this.logger.warn(
+                    `Admin wallet mismatch: ${adminWallet} is not the admin of group ${groupId}`,
+                    'GroupsService',
+                );
+                throw new ForbiddenException(
+                    'Only the group admin can activate this group',
+                );
+            }
+
+            // 3. Check group.status === PENDING
+            if (group.status !== GroupStatus.PENDING) {
+                this.logger.warn(
+                    `Cannot activate group ${groupId} with status ${group.status}`,
+                    'GroupsService',
+                );
+                throw new BadRequestException('Group is not in a pending state');
+            }
+
+            // 4. Check group.members.length >= group.minMembers
+            const memberCount = group.memberships?.length || 0;
+            if (memberCount < group.minMembers) {
+                this.logger.warn(
+                    `Group ${groupId} has ${memberCount} members but requires ${group.minMembers}`,
+                    'GroupsService',
+                );
+                throw new BadRequestException(
+                    'Group does not have enough members',
+                );
+            }
+
+            // 5. Set group.status = ACTIVE
+            group.status = GroupStatus.ACTIVE;
+
+            // 6. Set group.currentRound = 1
+            group.currentRound = 1;
+
+            // 7. If RoundsService exists, initialize the first round
+            // (RoundsService does not exist in this codebase, so we skip this step)
+
+            // 8. Persist and return the updated group
+            const savedGroup = await this.groupRepository.save(group);
+
+            this.logger.log(
+                `Group ${groupId} activated successfully`,
+                'GroupsService',
+            );
+
+            return savedGroup;
+        } catch (error) {
+            if (
+                error instanceof NotFoundException ||
+                error instanceof ForbiddenException ||
+                error instanceof BadRequestException
+            ) {
+                throw error;
+            }
+            this.logger.error(
+                `Failed to activate group ${groupId}: ${error.message}`,
+                error.stack,
+                'GroupsService',
+            );
+            throw error;
+        }
+    }
 }
