@@ -13,6 +13,8 @@ import { Membership } from './memberships/entities/membership.entity';
 import { Group } from './groups/entities/group.entity';
 import { User } from './users/entities/user.entity';
 import { Contribution } from './contributions/entities/contribution.entity';
+import { StellarModule } from './stellar/stellar.module';
+import { EventListenerModule } from './event-listener/event-listener.module';
 
 @Module({
   imports: [
@@ -35,8 +37,11 @@ import { Contribution } from './contributions/entities/contribution.entity';
             configService.get<string>('DB_PASSWORD') || 'postgres',
           database: configService.get<string>('DB_NAME') || 'ahjoorxmr',
           entities: [Membership, Group, User, Contribution],
+
           synchronize: isDevelopment,
           logging: isDevelopment,
+          synchronize: isDevelopment, // Auto-create tables only in development
+          logging: isDevelopment, // Enable logging only in development
         };
       },
       inject: [ConfigService],
@@ -47,6 +52,8 @@ import { Contribution } from './contributions/entities/contribution.entity';
     GroupsModule,
     MembershipsModule,
     ContributionsModule,
+    StellarModule,
+    EventListenerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
