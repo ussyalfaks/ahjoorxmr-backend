@@ -63,8 +63,28 @@ async function bootstrap() {
     // V1 API Documentation
     const configV1 = new DocumentBuilder()
       .setTitle('Ahjoor Backend API v1')
-      .setDescription('Version 1 of the Ahjoor Backend API')
+      .setDescription(
+        'Version 1 of the Ahjoor Backend API. ' +
+        'This API provides endpoints for user authentication, ROSCA group management, ' +
+        'membership tracking, contribution processing, and more.',
+      )
       .setVersion('1.0.0')
+      .setContact(
+        'Ahjoor Team',
+        'https://ahjoor.com',
+        'support@ahjoor.com',
+      )
+      .setLicense('UNLICENSED', '')
+      .addServer('http://localhost:3000', 'Local Development Server')
+      .addServer('https://api.ahjoor.com', 'Production Server')
+      .addTag('Authentication', 'User authentication and authorization endpoints')
+      .addTag('Users', 'User management endpoints')
+      .addTag('Groups', 'ROSCA group management endpoints')
+      .addTag('Memberships', 'Group membership management endpoints')
+      .addTag('Contributions', 'Contribution tracking endpoints')
+      .addTag('Audit', 'Audit log and monitoring endpoints')
+      .addTag('Health', 'Health check and status endpoints')
+      .addTag('Rate Limiting', 'Rate limiting configuration and management')
       .addBearerAuth(
         {
           type: 'http',
@@ -87,14 +107,24 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs/v1', app, documentV1, {
       swaggerOptions: {
         persistAuthorization: true,
+        docExpansion: 'list',
+        filter: true,
+        showRequestDuration: true,
+        tryItOutEnabled: true,
       },
+      customSiteTitle: 'Ahjoor API Documentation',
     });
 
     // Main API docs redirect to v1
     SwaggerModule.setup('api/docs', app, documentV1, {
       swaggerOptions: {
         persistAuthorization: true,
+        docExpansion: 'list',
+        filter: true,
+        showRequestDuration: true,
+        tryItOutEnabled: true,
       },
+      customSiteTitle: 'Ahjoor API Documentation',
     });
 
     console.log(

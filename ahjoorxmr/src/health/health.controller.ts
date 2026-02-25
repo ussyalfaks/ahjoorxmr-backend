@@ -66,7 +66,3 @@ export class HealthController {
     return this.healthService.getDatabaseHealth();
   }
 }
-  getReadiness(): ReadinessResponseDto {
-    return this.healthService.getReadinessStatus();
-  }
-}

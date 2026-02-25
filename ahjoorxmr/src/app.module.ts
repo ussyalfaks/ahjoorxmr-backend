@@ -23,25 +23,13 @@ import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
-
     // ConfigModule must be first to make environment variables available
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-    // TypeORM configuration with SQLite for development
-    // For production, replace with PostgreSQL configuration using environment variables
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: ':memory:', // In-memory database for development
-      entities: [Membership, Group, User, Contribution],
-      synchronize: true, // Auto-create tables (disable in production)
-      logging: false,
-=======
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-    }),
+    
+    // TypeORM configuration with PostgreSQL
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
@@ -57,15 +45,13 @@ import { AuditModule } from './audit/audit.module';
             configService.get<string>('DB_PASSWORD') || 'postgres',
           database: configService.get<string>('DB_NAME') || 'ahjoorxmr',
           entities: [Membership, Group, User, Contribution, AuditLog],
-
-          synchronize: isDevelopment,
-          logging: isDevelopment,
           synchronize: isDevelopment, // Auto-create tables only in development
           logging: isDevelopment, // Enable logging only in development
         };
       },
       inject: [ConfigService],
     }),
+    
     // RedisModule for caching and session management
     RedisModule,
     CustomThrottlerModule,
