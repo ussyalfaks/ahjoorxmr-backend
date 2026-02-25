@@ -1,9 +1,10 @@
-import { Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Post, Version } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { EventListenerService } from './event-listener.service';
 
 @ApiTags('Admin - Event Listener')
-@Controller('api/v1/admin/event-listener')
+@Controller('admin/event-listener')
+@Version('1')
 export class EventListenerController {
   constructor(private readonly eventListenerService: EventListenerService) {}
 

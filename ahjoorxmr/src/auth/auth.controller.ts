@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Version } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -24,6 +24,7 @@ class JwtAuthGuard {}
 
 @ApiTags('Authentication')
 @Controller('auth')
+@Version('1')
 export class AuthController {
   constructor(private readonly twoFactorService: TwoFactorService) {}
   @Post('login')

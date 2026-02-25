@@ -4,6 +4,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Version,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { QueueService, AllQueueStats } from './queue.service';
@@ -19,7 +20,8 @@ import { QueueService, AllQueueStats } from './queue.service';
 @ApiBearerAuth()
 // @UseGuards(JwtAuthGuard, RolesGuard)
 // @Roles('admin')
-@Controller('api/v1/admin/queue')
+@Controller('admin/queue')
+@Version('1')
 export class QueueAdminController {
   constructor(private readonly queueService: QueueService) {}
 

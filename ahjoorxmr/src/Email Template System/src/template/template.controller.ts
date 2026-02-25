@@ -1,7 +1,8 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Controller, Get, Param, Query, Version } from "@nestjs/common";
 import { TemplateService } from "./template.service";
 
-@Controller("api/v1/admin")
+@Controller("admin")
+@Version('1')
 export class TemplateController {
   constructor(private readonly templateService: TemplateService) {}
 

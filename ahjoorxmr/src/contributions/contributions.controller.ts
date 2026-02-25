@@ -1,4 +1,4 @@
-import { Controller, Post, Get, HttpCode, HttpStatus, Param, Body, Query, UseGuards, ParseUUIDPipe, ParseIntPipe, Request } from '@nestjs/common';
+import { Controller, Post, Get, HttpCode, HttpStatus, Param, Body, Query, UseGuards, ParseUUIDPipe, ParseIntPipe, Request, Version } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ContributionsService } from './contributions.service';
 import { CreateContributionDto } from './dto/create-contribution.dto';
@@ -12,7 +12,8 @@ import { AuditLog } from '../audit/decorators/audit-log.decorator';
  * Controller for managing ROSCA group contributions.
  * Provides REST API endpoints for creating and querying contribution records.
  */
-@Controller('api/v1')
+@Controller()
+@Version('1')
 export class ContributionsController {
   constructor(private readonly contributionsService: ContributionsService) { }
 

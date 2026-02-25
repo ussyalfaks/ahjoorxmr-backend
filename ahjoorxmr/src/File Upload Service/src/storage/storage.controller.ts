@@ -10,12 +10,14 @@ import {
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
+  Version,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { StorageService } from "./storage.service";
 import { UploadFileDto } from "./dto/upload-file.dto";
 
-@Controller("api/v1/upload")
+@Controller("upload")
+@Version('1')
 export class StorageController {
   constructor(private readonly storageService: StorageService) {}
 

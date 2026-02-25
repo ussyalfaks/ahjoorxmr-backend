@@ -13,6 +13,7 @@ import {
     Request,
     ParseIntPipe,
     DefaultValuePipe,
+    Version,
 } from '@nestjs/common';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -34,7 +35,8 @@ import { AuditLog } from '../audit/decorators/audit-log.decorator';
  * IMPORTANT: The GET /my route is declared BEFORE GET /:id to prevent
  * NestJS from treating "my" as a UUID parameter.
  */
-@Controller('api/v1/groups')
+@Controller('groups')
+@Version('1')
 export class GroupsController {
     constructor(private readonly groupsService: GroupsService) { }
 

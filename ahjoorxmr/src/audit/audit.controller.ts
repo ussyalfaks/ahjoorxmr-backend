@@ -1,11 +1,12 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Version } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuditService } from './audit.service';
 import { AuditLogQueryDto } from './dto/audit-log-query.dto';
 import { PaginatedAuditLogResponseDto } from './dto/audit-log-response.dto';
 
 @ApiTags('Audit')
-@Controller('api/v1/admin/audit-logs')
+@Controller('admin/audit-logs')
+@Version('1')
 @ApiBearerAuth()
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}

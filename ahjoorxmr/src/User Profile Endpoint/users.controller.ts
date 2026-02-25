@@ -5,13 +5,15 @@ import {
   Patch,
   Request,
   UseGuards,
+  Version,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { UsersService } from './users.service';
 
-@Controller('api/v1/users')
+@Controller('users')
+@Version('1')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

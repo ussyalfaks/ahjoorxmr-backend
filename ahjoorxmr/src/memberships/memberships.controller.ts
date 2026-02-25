@@ -8,6 +8,7 @@ import {
   Param,
   Body,
   ParseUUIDPipe,
+  Version,
 } from '@nestjs/common';
 import { MembershipsService } from './memberships.service';
 import { CreateMembershipDto } from './dto/create-membership.dto';
@@ -18,7 +19,8 @@ import { AuditLog } from '../audit/decorators/audit-log.decorator';
  * Controller for managing ROSCA group memberships.
  * Provides REST API endpoints for adding, removing, and listing group members.
  */
-@Controller('api/v1/groups')
+@Controller('groups')
+@Version('1')
 export class MembershipsController {
   constructor(private readonly membershipsService: MembershipsService) {}
 
