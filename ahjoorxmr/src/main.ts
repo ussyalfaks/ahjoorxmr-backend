@@ -7,7 +7,6 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { ApiVersionDeprecationInterceptor } from './common/interceptors/api-version-deprecation.interceptor';
 import { WinstonLogger } from './common/logger/winston.logger';
-import { CustomThrottlerGuard } from './throttler/guards/custom-throttler.guard';
 import { RateLimitHeadersInterceptor } from './throttler/interceptors/rate-limit-headers.interceptor';
 
 async function bootstrap() {
@@ -15,7 +14,7 @@ async function bootstrap() {
     logger: new WinstonLogger(),
   });
 
-  // Get Reflector for guards and interceptors
+  // Get Reflector for interceptors
   const reflector = app.get(Reflector);
 
   // Enable API versioning
@@ -34,8 +33,8 @@ async function bootstrap() {
     }),
   );
 
-  // Global guards
-  app.useGlobalGuards(new CustomThrottlerGuard({ reflector }));
+  // Note: CustomThrottlerGuard is now registered as APP_GUARD in CustomThrottlerModule
+  // No need to manually instantiate it here
 
   // Global filters
   app.useGlobalFilters(new HttpExceptionFilter());
@@ -44,7 +43,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
     new TransformInterceptor(),
-    new RateLimitHeadersInterceptor(),
+    new RateLimitHeadersInterceptor(reflector),
     new ApiVersionDeprecationInterceptor(reflector),
   );
 
