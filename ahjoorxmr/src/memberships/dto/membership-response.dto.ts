@@ -12,6 +12,7 @@ export class MembershipResponseDto {
   payoutOrder: number;
   hasReceivedPayout: boolean;
   hasPaidCurrentRound: boolean;
+  transactionHash?: string | null;
   status: MembershipStatus;
   createdAt: string;
   updatedAt: string;

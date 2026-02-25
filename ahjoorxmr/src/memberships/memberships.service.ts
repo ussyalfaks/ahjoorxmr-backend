@@ -11,6 +11,9 @@ import { Group } from '../groups/entities/group.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
 import { CreateMembershipDto } from './dto/create-membership.dto';
 import { MembershipStatus } from './entities/membership-status.enum';
+import { NotificationsService } from '../notification/notifications.service';
+import { NotificationType } from '../notification/notification-type.enum';
+import { GroupStatus } from '../groups/entities/group-status.enum';
 
 /**
  * Service responsible for managing membership operations in ROSCA groups.
@@ -24,6 +27,7 @@ export class MembershipsService {
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
     private readonly logger: WinstonLogger,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -278,5 +282,77 @@ export class MembershipsService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Records a payout to a member.
+   * Validates group is ACTIVE, member exists and hasn't received payout yet.
+   * Marks member as paid and stores transaction hash.
+   *
+   * @param groupId - The UUID of the group
+   * @param recipientUserId - The UUID of the recipient user
+   * @param transactionHash - The blockchain transaction hash
+   * @returns The updated Membership entity
+   * @throws NotFoundException if group or membership doesn't exist
+   * @throws BadRequestException if group is not ACTIVE
+   * @throws ConflictException if member already received payout
+   */
+  async recordPayout(
+    groupId: string,
+    recipientUserId: string,
+    transactionHash: string,
+  ): Promise<Membership> {
+    this.logger.log(
+      `Recording payout for user ${recipientUserId} in group ${groupId}`,
+      'MembershipsService',
+    );
+
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    if (group.status !== GroupStatus.ACTIVE) {
+      throw new BadRequestException('Group must be ACTIVE to record payouts');
+    }
+
+    const membership = await this.membershipRepository.findOne({
+      where: { groupId, userId: recipientUserId },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('Membership not found');
+    }
+
+    if (membership.hasReceivedPayout) {
+      throw new ConflictException('Member has already received payout');
+    }
+
+    membership.hasReceivedPayout = true;
+    membership.transactionHash = transactionHash;
+
+    const savedMembership = await this.membershipRepository.save(membership);
+
+    await this.notificationsService.notify({
+      userId: recipientUserId,
+      type: NotificationType.PAYOUT_RECEIVED,
+      title: 'Payout Received',
+      body: `You have received your payout from group "${group.name}"`,
+      metadata: {
+        groupId,
+        transactionHash,
+        amount: group.contributionAmount,
+      },
+    });
+
+    this.logger.log(
+      `Payout recorded for user ${recipientUserId} in group ${groupId}`,
+      'MembershipsService',
+    );
+
+    return savedMembership;
   }
 }
