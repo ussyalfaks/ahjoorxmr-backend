@@ -161,6 +161,7 @@ GET /api/v2/users
 When introducing breaking changes:
 
 1. **Create version-specific controllers** (if needed):
+
    ```typescript
    @Controller('users')
    @Version('2')
@@ -168,6 +169,7 @@ When introducing breaking changes:
    ```
 
 2. **Create version-specific DTOs** (if needed):
+
    ```
    dto/
      v1/
