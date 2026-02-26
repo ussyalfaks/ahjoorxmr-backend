@@ -10,6 +10,7 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { RedisService } from '../common/redis/redis.service';
 import { UsersService } from '../users/users.service';
 import { JwtPayload } from './jwt.strategy';
+import { RedisService } from '../common/redis/redis.service';
 
 @Injectable()
 export class AuthService {
@@ -29,7 +30,11 @@ export class AuthService {
     const challenge = `Sign this message to authenticate with Cheese Platform.\n\nWallet: ${walletAddress}\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
 
     const redisKey = `${this.CHALLENGE_PREFIX}${walletAddress}`;
-    await this.redisService.setWithExpiry(redisKey, challenge, this.CHALLENGE_TTL_SECONDS);
+    await this.redisService.setWithExpiry(
+      redisKey,
+      challenge,
+      this.CHALLENGE_TTL_SECONDS,
+    );
 
     return challenge;
   }
@@ -41,7 +46,7 @@ export class AuthService {
   ): Promise<{ accessToken: string; refreshToken: string }> {
     // Validate challenge exists in Redis (replay protection)
     const redisKey = `${this.CHALLENGE_PREFIX}${walletAddress}`;
-    const storedChallenge = await this.redisService.get(redisKey);
+    const storedChallenge = await this.redisService.get<string>(redisKey);
 
     if (!storedChallenge) {
       throw new UnauthorizedException('Challenge expired or not found');
@@ -52,7 +57,11 @@ export class AuthService {
     }
 
     // Verify Stellar signature using transaction envelope
-    const isValid = this.verifyStellarSignature(walletAddress, signature, challenge);
+    const isValid = this.verifyStellarSignature(
+      walletAddress,
+      signature,
+      challenge,
+    );
     if (!isValid) {
       throw new UnauthorizedException('Invalid signature');
     }
@@ -86,7 +95,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const user = await this.usersService.findByWalletAddress(payload.walletAddress);
+    const user = await this.usersService.findByWalletAddress(
+      payload.walletAddress,
+    );
     if (!user || !user.refreshTokenHash) {
       throw new UnauthorizedException('Refresh token revoked');
     }
@@ -96,7 +107,10 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token mismatch');
     }
 
-    const accessToken = await this.issueAccessToken(user.id, user.walletAddress);
+    const accessToken = await this.issueAccessToken(
+      user.id,
+      user.walletAddress,
+    );
     return { accessToken };
   }
 

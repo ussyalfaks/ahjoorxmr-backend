@@ -1,12 +1,15 @@
 import { Module, Global } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { RedisService } from './redis.service';
 
 /**
- * RedisModule - Global module for Redis operations
- * Provides RedisService for caching and authentication challenge storage
+ * RedisModule provides Redis caching capabilities throughout the application.
+ * It is marked as global so RedisService can be injected anywhere without
+ * re-importing the module.
  */
 @Global()
 @Module({
+  imports: [ConfigModule],
   providers: [RedisService],
   exports: [RedisService],
 })

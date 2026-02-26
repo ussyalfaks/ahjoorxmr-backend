@@ -39,6 +39,9 @@ export class Membership extends BaseEntity {
   @Column('boolean', { default: false })
   hasPaidCurrentRound: boolean;
 
+  @Column('varchar', { length: 255, nullable: true })
+  transactionHash: string | null;
+
   // Note: Using varchar instead of enum for SQLite compatibility
   // For PostgreSQL, you can use: type: 'enum', enum: MembershipStatus
   @Column({

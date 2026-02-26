@@ -28,7 +28,7 @@ export class HealthController {
     description: 'Internal server error',
     type: InternalServerErrorResponseDto,
   })
-  getHealth(): HealthResponseDto {
+  async getHealth(): Promise<HealthResponseDto> {
     return this.healthService.getHealthStatus();
   }
 
@@ -48,7 +48,39 @@ export class HealthController {
     description: 'Internal server error',
     type: InternalServerErrorResponseDto,
   })
+  async getReadiness(): Promise<ReadinessResponseDto> {
+    return this.healthService.getReadinessStatus();
+  }
+
+  @Get('database')
+  @ApiOperation({
+    summary: 'Get database health status',
+    description:
+      'Returns detailed database health information including connection pool stats and database size',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Database health status retrieved successfully',
+  })
+  async getDatabaseHealth() {
+    return this.healthService.getDatabaseHealth();
+  }
+}
   getReadiness(): ReadinessResponseDto {
     return this.healthService.getReadinessStatus();
+  }
+
+  @Get('database')
+  @ApiOperation({
+    summary: 'Get database health status',
+    description:
+      'Returns detailed database health information including connection pool stats and database size',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Database health status retrieved successfully',
+  })
+  async getDatabaseHealth() {
+    return this.healthService.getDatabaseHealth();
   }
 }
