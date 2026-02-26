@@ -7,9 +7,10 @@ import { QueueService } from './queue.service';
 import { QueueAdminController } from './queue-admin.controller';
 import { DeadLetterService } from './dead-letter.service';
 import { BullBoardService } from './bull-board.service';
-import { EmailProcessor } from './processors/email.processor';
-import { EventSyncProcessor } from './processors/event-sync.processor';
-import { GroupSyncProcessor } from './processors/group-sync.processor';
+import { EmailProcessor } from './email.processor';
+import { EventSyncProcessor } from './event-sync.processor';
+import { GroupSyncProcessor } from './group-sync.processor';
+import { MailModule } from '../mail/mail.module';
 
 /**
  * Custom backoff strategy registered globally via BullMQ worker options.
@@ -34,6 +35,7 @@ const sharedQueueOptions = {
 @Module({
   imports: [
     ConfigModule,
+    MailModule,
 
     // Register BullMQ with the shared ioredis client from RedisModule
     BullModule.forRootAsync({

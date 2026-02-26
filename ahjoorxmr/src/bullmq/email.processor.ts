@@ -6,9 +6,9 @@ import {
   SendEmailJobData,
   SendNotificationEmailJobData,
   SendWelcomeEmailJobData,
-  DeadLetterJobData,
 } from './queue.interfaces';
 import { DeadLetterService } from './dead-letter.service';
+import { MailService } from '../mail/mail.service';
 
 @Processor(QUEUE_NAMES.EMAIL, {
   concurrency: 5,
@@ -17,7 +17,10 @@ import { DeadLetterService } from './dead-letter.service';
 export class EmailProcessor extends WorkerHost {
   private readonly logger = new Logger(EmailProcessor.name);
 
-  constructor(private readonly deadLetterService: DeadLetterService) {
+  constructor(
+    private readonly deadLetterService: DeadLetterService,
+    private readonly mailService: MailService,
+  ) {
     super();
   }
 
@@ -44,19 +47,34 @@ export class EmailProcessor extends WorkerHost {
       `Sending email to=${JSON.stringify(to)} subject="${subject}"`,
     );
 
-    // TODO: inject and call your MailerService / nodemailer transport here
-    // await this.mailerService.sendMail({ to, subject, html, text, template, context });
+    await this.mailService.sendMail({
+      to,
+      subject,
+      html,
+      text,
+      template,
+      context,
+    });
     this.logger.log(`Email sent successfully to=${JSON.stringify(to)}`);
   }
 
   private async handleSendNotificationEmail(
     job: Job<SendNotificationEmailJobData>,
   ): Promise<void> {
-    const { userId, notificationType, to, subject } = job.data;
+    const { userId, notificationType, to, subject, body, actionLink } =
+      job.data;
     this.logger.log(
       `Sending notification email userId=${userId} type=${notificationType} to=${to}`,
     );
-    // TODO: await this.mailerService.sendMail(job.data);
+
+    const recipient = Array.isArray(to) ? to[0] : to;
+    await this.mailService.sendNotificationEmail(
+      recipient,
+      userId,
+      subject,
+      body,
+      actionLink,
+    );
     this.logger.log(`Notification email sent userId=${userId}`);
   }
 
@@ -65,7 +83,8 @@ export class EmailProcessor extends WorkerHost {
   ): Promise<void> {
     const { userId, email, username } = job.data;
     this.logger.log(`Sending welcome email userId=${userId} email=${email}`);
-    // TODO: await this.mailerService.sendMail({ to: email, subject: 'Welcome!', template: 'welcome', context: { username } });
+
+    await this.mailService.sendWelcomeEmail(email, username);
     this.logger.log(`Welcome email sent userId=${userId}`);
   }
 
@@ -100,7 +119,6 @@ export class EmailProcessor extends WorkerHost {
   }
 }
 
-// Custom backoff strategy — used by BullMQ when backoff.type === 'custom'
 export function emailBackoffStrategy(attemptsMade: number): number {
   return (
     BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1]
