@@ -29,6 +29,8 @@ import { SeedModule } from './database/seeds/seed.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    
+    // TypeORM configuration with PostgreSQL
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
@@ -50,6 +52,7 @@ import { SeedModule } from './database/seeds/seed.module';
       },
       inject: [ConfigService],
     }),
+    
     // RedisModule for caching and session management
     RedisModule,
     CustomThrottlerModule,

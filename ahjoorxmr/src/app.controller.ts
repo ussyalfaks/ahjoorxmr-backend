@@ -3,9 +3,8 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AppService } from './app.service';
 import { InternalServerErrorResponseDto } from './common/dto/error-response.dto';
 
-@ApiTags('Application')
 @Controller()
-@Version('1')
+@ApiTags('Application')
 export class AppController {
   constructor(private readonly appService: AppService) {}
 

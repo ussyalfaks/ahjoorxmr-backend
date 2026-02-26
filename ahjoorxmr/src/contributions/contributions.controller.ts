@@ -1,4 +1,5 @@
 import { Controller, Post, Get, HttpCode, HttpStatus, Param, Body, Query, UseGuards, ParseUUIDPipe, ParseIntPipe, Request, Version } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody, ApiSecurity } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { ContributionsService } from './contributions.service';
 import { CreateContributionDto } from './dto/create-contribution.dto';
@@ -7,11 +8,13 @@ import { GetContributionsQueryDto } from './dto/get-contributions-query.dto';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuditLog } from '../audit/decorators/audit-log.decorator';
+import { ErrorResponseDto } from '../common/dto/error-response.dto';
 
 /**
  * Controller for managing ROSCA group contributions.
  * Provides REST API endpoints for creating and querying contribution records.
  */
+@ApiTags('Contributions')
 @Controller()
 @Version('1')
 export class ContributionsController {
@@ -30,8 +33,39 @@ export class ContributionsController {
    */
   @Post('internal/contributions')
   @UseGuards(ApiKeyGuard)
+  @ApiSecurity('api_key')
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create contribution record (internal)',
+    description: 'Creates a new contribution record. Protected by API key. Rate limited to 10 requests per minute.'
+  })
+  @ApiBody({ type: CreateContributionDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Contribution created successfully',
+    type: ContributionResponseDto
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data or foreign key violation',
+    type: ErrorResponseDto
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - API key required',
+    type: ErrorResponseDto
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Transaction hash already exists',
+    type: ErrorResponseDto
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests - rate limit exceeded',
+    type: ErrorResponseDto
+  })
   @AuditLog({ action: 'CREATE', resource: 'CONTRIBUTION' })
   async createContribution(
     @Body() createContributionDto: CreateContributionDto,
@@ -65,6 +99,35 @@ export class ContributionsController {
    * @throws NotFoundException if the group doesn't exist
    */
   @Get('groups/:id/contributions')
+  @ApiOperation({
+    summary: 'Get group contributions',
+    description: 'Retrieves all contributions for a specific group with pagination, sorting, and filtering'
+  })
+  @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved contributions',
+    schema: {
+      type: 'object',
+      properties: {
+        data: { type: 'array', items: { $ref: '#/components/schemas/ContributionResponseDto' } },
+        total: { type: 'number', example: 100 },
+        page: { type: 'number', example: 1 },
+        limit: { type: 'number', example: 20 },
+        totalPages: { type: 'number', example: 5 }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid UUID format',
+    type: ErrorResponseDto
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group not found',
+    type: ErrorResponseDto
+  })
   async getGroupContributions(
     @Param('id', ParseUUIDPipe) groupId: string,
     @Query() query: GetContributionsQueryDto,
