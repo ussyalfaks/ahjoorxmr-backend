@@ -202,7 +202,11 @@ describe('MembershipsService', () => {
     it('should record payout successfully', async () => {
       const group = createMockGroup({ status: GroupStatus.ACTIVE });
       const membership = createMockMembership({ hasReceivedPayout: false });
-      const updatedMembership = { ...membership, hasReceivedPayout: true, transactionHash: txHash };
+      const updatedMembership = {
+        ...membership,
+        hasReceivedPayout: true,
+        transactionHash: txHash,
+      };
 
       groupRepository.findOne!.mockResolvedValue(group);
       membershipRepository.findOne!.mockResolvedValue(membership);
@@ -224,18 +228,18 @@ describe('MembershipsService', () => {
     it('should throw NotFoundException when group does not exist', async () => {
       groupRepository.findOne!.mockResolvedValue(null);
 
-      await expect(service.recordPayout(groupId, userId, txHash)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException when group is not ACTIVE', async () => {
       const group = createMockGroup({ status: GroupStatus.PENDING });
       groupRepository.findOne!.mockResolvedValue(group);
 
-      await expect(service.recordPayout(groupId, userId, txHash)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw NotFoundException when membership does not exist', async () => {
@@ -243,9 +247,9 @@ describe('MembershipsService', () => {
       groupRepository.findOne!.mockResolvedValue(group);
       membershipRepository.findOne!.mockResolvedValue(null);
 
-      await expect(service.recordPayout(groupId, userId, txHash)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('should throw ConflictException when member already received payout', async () => {
@@ -255,12 +259,12 @@ describe('MembershipsService', () => {
       groupRepository.findOne!.mockResolvedValue(group);
       membershipRepository.findOne!.mockResolvedValue(membership);
 
-      await expect(service.recordPayout(groupId, userId, txHash)).rejects.toThrow(
-        ConflictException,
-      );
-      await expect(service.recordPayout(groupId, userId, txHash)).rejects.toThrow(
-        'Member has already received payout',
-      );
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(ConflictException);
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow('Member has already received payout');
     });
   });
 

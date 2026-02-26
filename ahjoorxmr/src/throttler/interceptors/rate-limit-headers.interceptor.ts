@@ -41,7 +41,7 @@ export class RateLimitHeadersInterceptor implements NestInterceptor {
         try {
           // Get rate limit info from request (set by throttler guard)
           const rateLimitInfo = (request as any).rateLimit;
-          
+
           // Determine limit and TTL
           let limit = 100; // default
           let ttl = 60000; // default 1 minute
@@ -65,17 +65,26 @@ export class RateLimitHeadersInterceptor implements NestInterceptor {
           // Standard rate limit headers (widely supported)
           response.setHeader('X-RateLimit-Limit', limit.toString());
           response.setHeader('X-RateLimit-Remaining', remaining.toString());
-          response.setHeader('X-RateLimit-Reset', Math.floor(resetTime / 1000).toString());
+          response.setHeader(
+            'X-RateLimit-Reset',
+            Math.floor(resetTime / 1000).toString(),
+          );
 
           // Additional informational headers
-          response.setHeader('X-RateLimit-Reset-After', Math.max(0, resetSeconds).toString());
+          response.setHeader(
+            'X-RateLimit-Reset-After',
+            Math.max(0, resetSeconds).toString(),
+          );
           response.setHeader('X-RateLimit-Window', (ttl / 1000).toString());
 
           // Draft standard headers (RateLimit-* format)
           // See: https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/
           response.setHeader('RateLimit-Limit', limit.toString());
           response.setHeader('RateLimit-Remaining', remaining.toString());
-          response.setHeader('RateLimit-Reset', Math.max(0, resetSeconds).toString());
+          response.setHeader(
+            'RateLimit-Reset',
+            Math.max(0, resetSeconds).toString(),
+          );
 
           // Policy header describing the rate limit policy
           response.setHeader(
@@ -85,7 +94,10 @@ export class RateLimitHeadersInterceptor implements NestInterceptor {
 
           // Add retry-after header if nearing limit
           if (remaining === 0) {
-            response.setHeader('Retry-After', Math.max(0, resetSeconds).toString());
+            response.setHeader(
+              'Retry-After',
+              Math.max(0, resetSeconds).toString(),
+            );
           }
 
           this.logger.debug(

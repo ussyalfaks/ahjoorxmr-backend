@@ -66,8 +66,12 @@ describe('EventListenerService', () => {
       return '10';
     });
     mockContributionRepository.findOne.mockResolvedValue(null);
-    mockContributionRepository.create.mockImplementation((value: unknown) => value);
-    mockContributionRepository.save.mockResolvedValue({ id: 'new-contribution' });
+    mockContributionRepository.create.mockImplementation(
+      (value: unknown) => value,
+    );
+    mockContributionRepository.save.mockResolvedValue({
+      id: 'new-contribution',
+    });
     mockContributionRepository.update.mockResolvedValue(undefined);
     mockMembershipRepository.update.mockResolvedValue(undefined);
     mockGroupRepository.increment.mockResolvedValue(undefined);

@@ -4,7 +4,11 @@ import { EmailProcessor } from '../../queue/processors/email.processor';
 import { DeadLetterService } from '../../queue/dead-letter.service';
 import { JOB_NAMES, QUEUE_NAMES } from '../../queue/queue.constants';
 
-const makeJob = (name: string, data: unknown, overrides: Partial<Job> = {}): Job =>
+const makeJob = (
+  name: string,
+  data: unknown,
+  overrides: Partial<Job> = {},
+): Job =>
   ({
     id: 'test-job-id',
     name,
@@ -12,7 +16,7 @@ const makeJob = (name: string, data: unknown, overrides: Partial<Job> = {}): Job
     attemptsMade: 0,
     opts: { attempts: 3 },
     ...overrides,
-  } as unknown as Job);
+  }) as unknown as Job;
 
 describe('EmailProcessor', () => {
   let processor: EmailProcessor;
@@ -82,16 +86,23 @@ describe('EmailProcessor', () => {
   // ---------------------------------------------------------------------------
   describe('onFailed()', () => {
     it('should NOT call moveToDeadLetter when retries are not exhausted', async () => {
-      const job = makeJob(JOB_NAMES.SEND_EMAIL, {}, { attemptsMade: 1, opts: { attempts: 3 } } as any);
+      const job = makeJob(JOB_NAMES.SEND_EMAIL, {}, {
+        attemptsMade: 1,
+        opts: { attempts: 3 },
+      } as any);
       await processor.onFailed(job, new Error('SMTP timeout'));
       expect(deadLetterService.moveToDeadLetter).not.toHaveBeenCalled();
     });
 
     it('should call moveToDeadLetter when all retries are exhausted', async () => {
-      const job = makeJob(JOB_NAMES.SEND_EMAIL, { to: 'a@b.com', subject: 'x' }, {
-        attemptsMade: 3,
-        opts: { attempts: 3 },
-      } as any);
+      const job = makeJob(
+        JOB_NAMES.SEND_EMAIL,
+        { to: 'a@b.com', subject: 'x' },
+        {
+          attemptsMade: 3,
+          opts: { attempts: 3 },
+        } as any,
+      );
       await processor.onFailed(job, new Error('SMTP failed permanently'));
       expect(deadLetterService.moveToDeadLetter).toHaveBeenCalledWith(
         job,

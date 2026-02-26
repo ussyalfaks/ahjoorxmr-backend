@@ -1,8 +1,4 @@
-import {
-  Entity,
-  Column,
-  OneToMany,
-} from 'typeorm';
+import { Entity, Column, OneToMany } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { GroupStatus } from './group-status.enum';
 import { Membership } from '../../memberships/entities/membership.entity';

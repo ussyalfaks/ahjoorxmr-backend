@@ -110,7 +110,7 @@ export class Membership extends BaseEntity {
 
   recordMissedContribution(): void {
     this.contributionsMissed += 1;
-    
+
     // If missed too many contributions, mark as ineligible
     if (this.contributionsMissed > 2) {
       this.isEligibleForPayout = false;

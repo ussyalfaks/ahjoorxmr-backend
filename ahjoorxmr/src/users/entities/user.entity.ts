@@ -16,33 +16,46 @@ export class User extends BaseEntity {
   walletAddress: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true, unique: true })
-  email?: string;
+  email?: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  username?: string;
+  username?: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  password?: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: 'user',
+  })
+  role: 'admin' | 'user' | 'guest';
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  refreshTokenHash?: string | null;
 
   // Two-Factor Authentication
   @Column({ type: 'varchar', length: 255, nullable: true })
-  twoFactorSecret?: string;
+  twoFactorSecret?: string | null;
 
   @Column({ type: 'boolean', default: false })
   twoFactorEnabled: boolean;
 
   @Column({ type: 'simple-array', nullable: true })
-  backupCodes?: string[];
+  backupCodes?: string[] | null;
 
   // Profile Information
   @Column({ type: 'varchar', length: 255, nullable: true })
-  firstName?: string;
+  firstName?: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  lastName?: string;
+  lastName?: string | null;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
-  avatarUrl?: string;
+  avatarUrl?: string | null;
 
   @Column({ type: 'text', nullable: true })
-  bio?: string;
+  bio?: string | null;
 
   // Settings & Preferences
   @Column({ type: 'jsonb', nullable: true })
@@ -55,7 +68,7 @@ export class User extends BaseEntity {
       sms?: boolean;
     };
     theme?: 'light' | 'dark' | 'auto';
-  };
+  } | null;
 
   // Account Status
   @Column({ type: 'boolean', default: true })
@@ -65,26 +78,26 @@ export class User extends BaseEntity {
   isVerified: boolean;
 
   @Column({ type: 'timestamp', nullable: true })
-  verifiedAt?: Date;
+  verifiedAt?: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  lastLoginAt?: Date;
+  lastLoginAt?: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  bannedAt?: Date;
+  bannedAt?: Date | null;
 
   @Column({ type: 'text', nullable: true })
-  banReason?: string;
+  banReason?: string | null;
 
   // Metadata
   @Column({ type: 'varchar', length: 100, nullable: true })
-  registrationIp?: string;
+  registrationIp?: string | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  lastLoginIp?: string;
+  lastLoginIp?: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
-  metadata?: Record<string, any>;
+  metadata?: Record<string, any> | null;
 
   // Relationships
   @OneToMany(() => Membership, (membership) => membership.user, {

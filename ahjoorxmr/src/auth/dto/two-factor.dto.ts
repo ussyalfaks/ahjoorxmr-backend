@@ -8,7 +8,10 @@ export class Enable2FAResponseDto {
   @ApiProperty({ description: 'Secret key for manual entry' })
   secret: string;
 
-  @ApiProperty({ description: 'Backup codes for account recovery', type: [String] })
+  @ApiProperty({
+    description: 'Backup codes for account recovery',
+    type: [String],
+  })
   backupCodes: string[];
 }
 

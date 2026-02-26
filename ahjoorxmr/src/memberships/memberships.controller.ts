@@ -51,29 +51,30 @@ export class MembershipsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Add member to group',
-    description: 'Adds a new member to a ROSCA group. Only allowed before the group becomes active.'
+    description:
+      'Adds a new member to a ROSCA group. Only allowed before the group becomes active.',
   })
   @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
   @ApiBody({ type: CreateMembershipDto })
   @ApiResponse({
     status: 201,
     description: 'Member added successfully',
-    type: MembershipResponseDto
+    type: MembershipResponseDto,
   })
   @ApiResponse({
     status: 400,
     description: 'Invalid input data or group is already active',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: 404,
     description: 'Group not found',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: 409,
     description: 'User is already a member of this group',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
   })
   @AuditLog({ action: 'CREATE', resource: 'MEMBERSHIP' })
   async addMember(
@@ -114,23 +115,24 @@ export class MembershipsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Remove member from group',
-    description: 'Removes a member from a ROSCA group. Only allowed before the group becomes active.'
+    description:
+      'Removes a member from a ROSCA group. Only allowed before the group becomes active.',
   })
   @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
   @ApiParam({ name: 'userId', description: 'User UUID', format: 'uuid' })
   @ApiResponse({
     status: 204,
-    description: 'Member removed successfully'
+    description: 'Member removed successfully',
   })
   @ApiResponse({
     status: 400,
     description: 'Group is already active',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: 404,
     description: 'Group or membership not found',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
   })
   @AuditLog({ action: 'DELETE', resource: 'MEMBERSHIP' })
   async removeMember(
@@ -150,18 +152,18 @@ export class MembershipsController {
   @Get(':id/members')
   @ApiOperation({
     summary: 'List group members',
-    description: 'Lists all members of a ROSCA group, ordered by payout order'
+    description: 'Lists all members of a ROSCA group, ordered by payout order',
   })
   @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
   @ApiResponse({
     status: 200,
     description: 'Successfully retrieved group members',
-    type: [MembershipResponseDto]
+    type: [MembershipResponseDto],
   })
   @ApiResponse({
     status: 404,
     description: 'Group not found',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
   })
   async listMembers(
     @Param('id', ParseUUIDPipe) groupId: string,

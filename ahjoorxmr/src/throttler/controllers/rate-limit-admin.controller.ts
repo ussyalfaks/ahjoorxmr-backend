@@ -1,5 +1,20 @@
-import { Controller, Get, Post, Delete, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { TrustedIpService } from '../services/trusted-ip.service';
 import { SkipRateLimit } from '../decorators/rate-limit.decorator';
 
@@ -51,9 +66,7 @@ export class RateLimitAdminController {
   @ApiOperation({ summary: 'Manually block an IP address' })
   @ApiParam({ name: 'ip', description: 'IP address to block' })
   @ApiResponse({ status: 201, description: 'IP blocked successfully' })
-  async blockIp(
-    @Param('ip') ip: string,
-  ) {
+  async blockIp(@Param('ip') ip: string) {
     await this.trustedIpService.blockIp(ip, 3600, 'Manually blocked by admin');
     return { message: 'IP blocked successfully', ip };
   }
@@ -92,7 +105,10 @@ export class RateLimitAdminController {
   @SkipRateLimit()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove an IP from trusted list' })
-  @ApiParam({ name: 'ip', description: 'IP address to remove from trusted list' })
+  @ApiParam({
+    name: 'ip',
+    description: 'IP address to remove from trusted list',
+  })
   @ApiResponse({ status: 204, description: 'IP removed from trusted list' })
   async removeTrustedIp(@Param('ip') ip: string) {
     await this.trustedIpService.removeTrustedIp(ip);

@@ -28,7 +28,8 @@ describe('StellarService', () => {
         STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
         STELLAR_NETWORK: 'testnet',
         STELLAR_NETWORK_PASSPHRASE: (StellarSdk as any).Networks.TESTNET,
-        CONTRACT_ADDRESS: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+        CONTRACT_ADDRESS:
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
       };
       return values[key] ?? defaultValue;
     }),
@@ -129,34 +130,36 @@ describe('StellarService', () => {
       const message = 'Sign In With Stellar';
       const signature = keypair.sign(Buffer.from(message)).toString('base64');
 
-      expect(service.verifySignature(keypair.publicKey(), message, signature)).toBe(
-        true,
-      );
+      expect(
+        service.verifySignature(keypair.publicKey(), message, signature),
+      ).toBe(true);
     });
 
     it('returns false for malformed signature payload', () => {
       const keypair = (StellarSdk as any).Keypair.random();
       const message = 'Sign In With Stellar';
 
-      expect(service.verifySignature(keypair.publicKey(), message, 'not-base64!')).toBe(
-        false,
-      );
+      expect(
+        service.verifySignature(keypair.publicKey(), message, 'not-base64!'),
+      ).toBe(false);
     });
   });
 
   describe('configuration handling', () => {
     it('throws InternalServerErrorException when CONTRACT_ADDRESS is missing', async () => {
-      mockConfigService.get.mockImplementation((key: string, defaultValue?: string) => {
-        if (key === 'CONTRACT_ADDRESS') {
-          return '';
-        }
-        const values: Record<string, string> = {
-          STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
-          STELLAR_NETWORK: 'testnet',
-          STELLAR_NETWORK_PASSPHRASE: (StellarSdk as any).Networks.TESTNET,
-        };
-        return values[key] ?? defaultValue;
-      });
+      mockConfigService.get.mockImplementation(
+        (key: string, defaultValue?: string) => {
+          if (key === 'CONTRACT_ADDRESS') {
+            return '';
+          }
+          const values: Record<string, string> = {
+            STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
+            STELLAR_NETWORK: 'testnet',
+            STELLAR_NETWORK_PASSPHRASE: (StellarSdk as any).Networks.TESTNET,
+          };
+          return values[key] ?? defaultValue;
+        },
+      );
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [

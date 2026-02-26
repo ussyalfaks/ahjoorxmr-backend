@@ -65,19 +65,18 @@ async function bootstrap() {
       .setTitle('Ahjoor Backend API v1')
       .setDescription(
         'Version 1 of the Ahjoor Backend API. ' +
-        'This API provides endpoints for user authentication, ROSCA group management, ' +
-        'membership tracking, contribution processing, and more.',
+          'This API provides endpoints for user authentication, ROSCA group management, ' +
+          'membership tracking, contribution processing, and more.',
       )
       .setVersion('1.0.0')
-      .setContact(
-        'Ahjoor Team',
-        'https://ahjoor.com',
-        'support@ahjoor.com',
-      )
+      .setContact('Ahjoor Team', 'https://ahjoor.com', 'support@ahjoor.com')
       .setLicense('UNLICENSED', '')
       .addServer('http://localhost:3000', 'Local Development Server')
       .addServer('https://api.ahjoor.com', 'Production Server')
-      .addTag('Authentication', 'User authentication and authorization endpoints')
+      .addTag(
+        'Authentication',
+        'User authentication and authorization endpoints',
+      )
       .addTag('Users', 'User management endpoints')
       .addTag('Groups', 'ROSCA group management endpoints')
       .addTag('Memberships', 'Group membership management endpoints')
@@ -129,8 +128,8 @@ async function bootstrap() {
 
     console.log(
       `Swagger documentation available at:\n` +
-      `  - v1: http://localhost:${process.env.PORT ?? 3000}/api/docs/v1\n` +
-      `  - default: http://localhost:${process.env.PORT ?? 3000}/api/docs`,
+        `  - v1: http://localhost:${process.env.PORT ?? 3000}/api/docs/v1\n` +
+        `  - default: http://localhost:${process.env.PORT ?? 3000}/api/docs`,
     );
   }
 

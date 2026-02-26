@@ -7,9 +7,7 @@ import { DatabaseHealthService } from './database-health.service';
 
 @Injectable()
 export class HealthService {
-  constructor(
-    private readonly databaseHealthService: DatabaseHealthService,
-  ) {}
+  constructor(private readonly databaseHealthService: DatabaseHealthService) {}
 
   async getHealthStatus(): Promise<HealthResponseDto> {
     return {

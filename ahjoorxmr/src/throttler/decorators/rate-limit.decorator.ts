@@ -49,13 +49,13 @@ export const RateLimitPresets = {
 
 /**
  * Custom decorator to set rate limits for specific endpoints
- * 
+ *
  * @example
  * ```typescript
  * @ApiRateLimit(RateLimitPresets.STRICT)
  * @Post('login')
  * async login() { }
- * 
+ *
  * @ApiRateLimit({ ttl: 60000, limit: 5, message: 'Too many login attempts' })
  * @Post('login')
  * async login() { }
@@ -67,7 +67,7 @@ export const ApiRateLimit = (config: RateLimitConfig) =>
 /**
  * Decorator to skip rate limiting for specific endpoints
  * Use for health checks, metrics, or trusted internal endpoints
- * 
+ *
  * @example
  * ```typescript
  * @SkipRateLimit()
@@ -80,7 +80,7 @@ export const SkipRateLimit = () => SetMetadata(THROTTLE_SKIP_KEY, true);
 /**
  * Decorator to allow bypassing rate limits for trusted IPs
  * Should be used sparingly and with caution
- * 
+ *
  * @example
  * ```typescript
  * @AllowBypass()
@@ -93,7 +93,7 @@ export const AllowBypass = () => SetMetadata(THROTTLE_BYPASS_KEY, true);
 /**
  * Composite decorator for authentication endpoints
  * Applies strict rate limiting (5 req/min) with custom message
- * 
+ *
  * @example
  * ```typescript
  * @AuthRateLimit()
@@ -111,7 +111,7 @@ export const AuthRateLimit = () =>
 /**
  * Composite decorator for public endpoints
  * Applies lenient rate limiting (500 req/min)
- * 
+ *
  * @example
  * ```typescript
  * @PublicRateLimit()

@@ -211,9 +211,7 @@ describe('DatabaseHealthService', () => {
         .mockResolvedValueOnce([{ result: 1 }])
         .mockResolvedValueOnce([{ size: '50 MB' }])
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { query: 'SLOW QUERY...', avg_time: 1500 },
-        ]);
+        .mockResolvedValueOnce([{ query: 'SLOW QUERY...', avg_time: 1500 }]);
 
       const result = await service.getHealthReport();
 

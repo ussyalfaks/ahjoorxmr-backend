@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, UseGuards, Version } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  Version,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -18,58 +27,97 @@ import {
   Login2FADto,
 } from './dto/two-factor.dto';
 import { TwoFactorService } from './two-factor.service';
+import { AuthService } from './auth.service';
+import { RegisterDto, LoginDto, RefreshTokenDto } from './dto/auth.dto';
 
-// Mock guard for demonstration - replace with actual auth guard
-class JwtAuthGuard {}
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
-@Version('1')
 export class AuthController {
-  constructor(private readonly twoFactorService: TwoFactorService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly twoFactorService: TwoFactorService,
+  ) {}
+
   @Post('login')
+  @Version('1')
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 requests per minute
   @ApiOperation({
     summary: 'User login',
-    description: 'Authenticate user and return JWT token. Rate limited to 5 requests per minute.',
+    description:
+      'Authenticate user and return JWT token. Rate limited to 5 requests per minute.',
   })
   @ApiResponse({
     status: 200,
     description: 'Login successful',
   })
   @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid credentials',
+  })
+  @ApiResponse({
     status: 429,
     description: 'Too many requests - Rate limit exceeded',
   })
-  async login(@Body() loginDto: any) {
-    // Mock implementation
-    return { message: 'Login endpoint - implement authentication logic' };
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
   }
 
   @Post('register')
+  @Version('1')
   @Throttle({ default: { limit: 3, ttl: 300000 } }) // 3 requests per 5 minutes
   @ApiOperation({
     summary: 'User registration',
-    description: 'Register a new user. Rate limited to 3 requests per 5 minutes.',
+    description:
+      'Register a new user. Rate limited to 3 requests per 5 minutes.',
   })
   @ApiResponse({
     status: 201,
     description: 'Registration successful',
   })
   @ApiResponse({
+    status: 409,
+    description: 'Conflict - Email already exists',
+  })
+  @ApiResponse({
     status: 429,
     description: 'Too many requests - Rate limit exceeded',
   })
-  async register(@Body() registerDto: any) {
-    // Mock implementation
-    return { message: 'Register endpoint - implement registration logic' };
+  async register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
+  }
+
+  @Post('refresh')
+  @Version('1')
+  @ApiOperation({
+    summary: 'Refresh access token',
+    description: 'Get a new access token using a valid refresh token.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tokens refreshed successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid refresh token',
+  })
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
+    try {
+      const { refreshToken } = refreshTokenDto;
+      const payload = await this.authService.verifyRefreshToken(refreshToken);
+      return this.authService.refreshTokens(payload.sub, refreshToken);
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   @Post('reset-password')
   @Throttle({ default: { limit: 3, ttl: 300000 } }) // 3 requests per 5 minutes
   @ApiOperation({
     summary: 'Reset password',
-    description: 'Request password reset. Rate limited to 3 requests per 5 minutes.',
+    description:
+      'Request password reset. Rate limited to 3 requests per 5 minutes.',
   })
   @ApiResponse({
     status: 200,
@@ -85,6 +133,7 @@ export class AuthController {
   }
 
   @Get('profile')
+  @Version('1')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -119,18 +168,12 @@ export class AuthController {
     description: 'Internal server error',
     type: InternalServerErrorResponseDto,
   })
-  getProfile(): UserProfileDto {
-    // Mock response - replace with actual implementation
-    return {
-      id: '123e4567-e89b-12d3-a456-426614174000',
-      email: 'user@example.com',
-      name: 'John Doe',
-      role: 'user',
-      createdAt: '2024-01-01T00:00:00.000Z',
-    };
+  getProfile(@Req() req: any): UserProfileDto {
+    return req.user;
   }
 
   @Post('2fa/enable')
+  @Version('1')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -149,16 +192,19 @@ export class AuthController {
   async enable2FA(): Promise<Enable2FAResponseDto> {
     // Mock implementation - replace with actual user retrieval
     const userEmail = 'user@example.com';
-    
+
     const secret = this.twoFactorService.generateSecret();
-    const qrCode = await this.twoFactorService.generateQRCode(userEmail, secret);
+    const qrCode = await this.twoFactorService.generateQRCode(
+      userEmail,
+      secret,
+    );
     const backupCodes = this.twoFactorService.generateBackupCodes();
-    
+
     // TODO: Save secret and hashed backup codes to user entity
-    // const hashedBackupCodes = backupCodes.map(code => 
+    // const hashedBackupCodes = backupCodes.map(code =>
     //   this.twoFactorService.hashBackupCode(code)
     // );
-    
+
     return {
       qrCode,
       secret,
@@ -167,6 +213,7 @@ export class AuthController {
   }
 
   @Post('2fa/verify')
+  @Version('1')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -188,19 +235,20 @@ export class AuthController {
   async verify2FA(@Body() dto: Verify2FADto) {
     // Mock implementation - replace with actual user retrieval
     const userSecret = 'mock-secret'; // Get from user entity
-    
+
     const isValid = this.twoFactorService.verifyToken(dto.token, userSecret);
-    
+
     if (!isValid) {
       return { success: false, message: 'Invalid token' };
     }
-    
+
     // TODO: Update user entity to set twoFactorEnabled = true
-    
+
     return { success: true, message: '2FA enabled successfully' };
   }
 
   @Post('2fa/disable')
+  @Version('1')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
@@ -224,11 +272,12 @@ export class AuthController {
     // TODO: Verify password
     // TODO: Verify TOTP token
     // TODO: Update user entity to set twoFactorEnabled = false, clear secret and backup codes
-    
+
     return { success: true, message: '2FA disabled successfully' };
   }
 
   @Post('2fa/login')
+  @Version('1')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Complete 2FA login',
@@ -250,25 +299,28 @@ export class AuthController {
     // Mock implementation - replace with actual verification
     const userSecret = 'mock-secret'; // Get from user entity
     const backupCodes = []; // Get from user entity
-    
+
     // Try TOTP token first
-    const isValidToken = this.twoFactorService.verifyToken(dto.token, userSecret);
-    
+    const isValidToken = this.twoFactorService.verifyToken(
+      dto.token,
+      userSecret,
+    );
+
     if (isValidToken) {
       return { success: true, message: 'Login successful' };
     }
-    
+
     // Try backup code
     const isValidBackupCode = this.twoFactorService.verifyBackupCode(
       dto.token,
       backupCodes,
     );
-    
+
     if (isValidBackupCode) {
       // TODO: Remove used backup code from user entity
       return { success: true, message: 'Login successful with backup code' };
     }
-    
+
     return { success: false, message: 'Invalid token or backup code' };
   }
 }

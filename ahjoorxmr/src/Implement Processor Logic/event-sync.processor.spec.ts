@@ -46,8 +46,14 @@ describe('EventSyncProcessor', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EventSyncProcessor,
-        { provide: getRepositoryToken(OnChainEvent), useValue: onChainEventRepo },
-        { provide: getRepositoryToken(ApprovalEvent), useValue: approvalEventRepo },
+        {
+          provide: getRepositoryToken(OnChainEvent),
+          useValue: onChainEventRepo,
+        },
+        {
+          provide: getRepositoryToken(ApprovalEvent),
+          useValue: approvalEventRepo,
+        },
         { provide: ContributionsService, useValue: contributionsService },
       ],
     }).compile();
@@ -70,15 +76,26 @@ describe('EventSyncProcessor', () => {
 
     it('persists a new event and returns it', async () => {
       onChainEventRepo.findOne.mockResolvedValue(null);
-      const created = { id: 'uuid-1', ...payload, processedAt: new Date(), createdAt: new Date() } as OnChainEvent;
+      const created = {
+        id: 'uuid-1',
+        ...payload,
+        processedAt: new Date(),
+        createdAt: new Date(),
+      } as OnChainEvent;
       onChainEventRepo.create.mockReturnValue(created);
       onChainEventRepo.save.mockResolvedValue(created);
 
-      const job = makeJob<SyncOnChainEventPayload>(JOBS.SYNC_ON_CHAIN_EVENT, payload);
+      const job = makeJob<SyncOnChainEventPayload>(
+        JOBS.SYNC_ON_CHAIN_EVENT,
+        payload,
+      );
       const result = await processor.handleSyncOnChainEvent(job);
 
       expect(onChainEventRepo.findOne).toHaveBeenCalledWith({
-        where: { transactionHash: payload.transactionHash, chainId: payload.chainId },
+        where: {
+          transactionHash: payload.transactionHash,
+          chainId: payload.chainId,
+        },
       });
       expect(onChainEventRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ transactionHash: payload.transactionHash }),
@@ -91,7 +108,10 @@ describe('EventSyncProcessor', () => {
       const existing = { id: 'existing-id', ...payload } as OnChainEvent;
       onChainEventRepo.findOne.mockResolvedValue(existing);
 
-      const job = makeJob<SyncOnChainEventPayload>(JOBS.SYNC_ON_CHAIN_EVENT, payload);
+      const job = makeJob<SyncOnChainEventPayload>(
+        JOBS.SYNC_ON_CHAIN_EVENT,
+        payload,
+      );
       const result = await processor.handleSyncOnChainEvent(job);
 
       expect(onChainEventRepo.save).not.toHaveBeenCalled();
@@ -113,12 +133,19 @@ describe('EventSyncProcessor', () => {
     };
 
     it('delegates to ContributionsService', async () => {
-      contributionsService.recordContributionFromTransfer.mockResolvedValue({} as any);
-      const job = makeJob<TransferEventPayload>(JOBS.PROCESS_TRANSFER_EVENT, payload);
+      contributionsService.recordContributionFromTransfer.mockResolvedValue(
+        {} as any,
+      );
+      const job = makeJob<TransferEventPayload>(
+        JOBS.PROCESS_TRANSFER_EVENT,
+        payload,
+      );
 
       await processor.handleTransferEvent(job);
 
-      expect(contributionsService.recordContributionFromTransfer).toHaveBeenCalledWith(
+      expect(
+        contributionsService.recordContributionFromTransfer,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
           from: payload.from,
           transactionHash: payload.transactionHash,
@@ -127,10 +154,17 @@ describe('EventSyncProcessor', () => {
     });
 
     it('propagates errors from ContributionsService (job will retry)', async () => {
-      contributionsService.recordContributionFromTransfer.mockRejectedValue(new Error('DB error'));
-      const job = makeJob<TransferEventPayload>(JOBS.PROCESS_TRANSFER_EVENT, payload);
+      contributionsService.recordContributionFromTransfer.mockRejectedValue(
+        new Error('DB error'),
+      );
+      const job = makeJob<TransferEventPayload>(
+        JOBS.PROCESS_TRANSFER_EVENT,
+        payload,
+      );
 
-      await expect(processor.handleTransferEvent(job)).rejects.toThrow('DB error');
+      await expect(processor.handleTransferEvent(job)).rejects.toThrow(
+        'DB error',
+      );
     });
   });
 
@@ -149,11 +183,18 @@ describe('EventSyncProcessor', () => {
 
     it('persists a new approval event', async () => {
       approvalEventRepo.findOne.mockResolvedValue(null);
-      const created = { id: 'appr-1', ...payload, createdAt: new Date() } as ApprovalEvent;
+      const created = {
+        id: 'appr-1',
+        ...payload,
+        createdAt: new Date(),
+      } as ApprovalEvent;
       approvalEventRepo.create.mockReturnValue(created);
       approvalEventRepo.save.mockResolvedValue(created);
 
-      const job = makeJob<ApprovalEventPayload>(JOBS.PROCESS_APPROVAL_EVENT, payload);
+      const job = makeJob<ApprovalEventPayload>(
+        JOBS.PROCESS_APPROVAL_EVENT,
+        payload,
+      );
       const result = await processor.handleApprovalEvent(job);
 
       expect(approvalEventRepo.create).toHaveBeenCalledWith(
@@ -167,7 +208,10 @@ describe('EventSyncProcessor', () => {
       const existing = { id: 'appr-existing', ...payload } as ApprovalEvent;
       approvalEventRepo.findOne.mockResolvedValue(existing);
 
-      const job = makeJob<ApprovalEventPayload>(JOBS.PROCESS_APPROVAL_EVENT, payload);
+      const job = makeJob<ApprovalEventPayload>(
+        JOBS.PROCESS_APPROVAL_EVENT,
+        payload,
+      );
       const result = await processor.handleApprovalEvent(job);
 
       expect(approvalEventRepo.save).not.toHaveBeenCalled();
@@ -180,7 +224,9 @@ describe('EventSyncProcessor', () => {
   describe('process (dispatcher)', () => {
     it('throws on unknown job names', async () => {
       const job = makeJob('UNKNOWN_JOB', {});
-      await expect(processor.process(job)).rejects.toThrow('Unknown job name: UNKNOWN_JOB');
+      await expect(processor.process(job)).rejects.toThrow(
+        'Unknown job name: UNKNOWN_JOB',
+      );
     });
   });
 });

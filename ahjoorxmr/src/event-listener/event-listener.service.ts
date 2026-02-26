@@ -57,10 +57,12 @@ export class EventListenerService {
       this.configService.get<string>('STELLAR_RPC_URL') ??
       'https://horizon-testnet.stellar.org'
     ).replace(/\/+$/, '');
-    this.contractAddress = this.configService.get<string>('CONTRACT_ADDRESS') ?? '';
+    this.contractAddress =
+      this.configService.get<string>('CONTRACT_ADDRESS') ?? '';
 
     const intervalFromEnv = parseInt(
-      this.configService.get<string>('EVENT_POLL_INTERVAL_MS', '15000') ?? '15000',
+      this.configService.get<string>('EVENT_POLL_INTERVAL_MS', '15000') ??
+        '15000',
       10,
     );
     this.pollIntervalMs =
@@ -149,7 +151,10 @@ export class EventListenerService {
   }
 
   getPollingStatus(): { running: boolean; pollIntervalMs: number } {
-    return { running: this.pollingEnabled, pollIntervalMs: this.pollIntervalMs };
+    return {
+      running: this.pollingEnabled,
+      pollIntervalMs: this.pollIntervalMs,
+    };
   }
 
   private async fetchTransactionsSince(
@@ -187,7 +192,9 @@ export class EventListenerService {
     return [];
   }
 
-  private parseDiagnosticEvents(resultMetaXdr?: string): ParsedDiagnosticEvent[] {
+  private parseDiagnosticEvents(
+    resultMetaXdr?: string,
+  ): ParsedDiagnosticEvent[] {
     if (!resultMetaXdr) {
       return [];
     }
@@ -205,8 +212,10 @@ export class EventListenerService {
         .map((diagnosticEvent: any) =>
           this.normalizeContractEvent(diagnosticEvent?.event?.()),
         )
-        .filter((event: ParsedDiagnosticEvent | null): event is ParsedDiagnosticEvent =>
-          Boolean(event),
+        .filter(
+          (
+            event: ParsedDiagnosticEvent | null,
+          ): event is ParsedDiagnosticEvent => Boolean(event),
         );
     }
 
@@ -216,15 +225,19 @@ export class EventListenerService {
         .map((diagnosticEvent: any) =>
           this.normalizeContractEvent(diagnosticEvent?.event?.()),
         )
-        .filter((event: ParsedDiagnosticEvent | null): event is ParsedDiagnosticEvent =>
-          Boolean(event),
+        .filter(
+          (
+            event: ParsedDiagnosticEvent | null,
+          ): event is ParsedDiagnosticEvent => Boolean(event),
         );
     }
 
     return [];
   }
 
-  private normalizeContractEvent(contractEvent: any): ParsedDiagnosticEvent | null {
+  private normalizeContractEvent(
+    contractEvent: any,
+  ): ParsedDiagnosticEvent | null {
     try {
       const body = contractEvent?.body?.();
       const eventV0 = body?.v0?.();
@@ -306,7 +319,8 @@ export class EventListenerService {
       'memberWallet',
     ]);
     const amount = this.readString(payload, ['amount']);
-    const roundNumber = this.readNumber(payload, ['roundNumber', 'round_number']) ?? 1;
+    const roundNumber =
+      this.readNumber(payload, ['roundNumber', 'round_number']) ?? 1;
 
     if (!groupId || !userId || !walletAddress || !amount) {
       this.logger.warn(
@@ -377,10 +391,16 @@ export class EventListenerService {
       'walletAddress',
       'wallet_address',
     ]);
-    const payoutOrder = this.readNumber(payload, ['payoutOrder', 'payout_order']);
+    const payoutOrder = this.readNumber(payload, [
+      'payoutOrder',
+      'payout_order',
+    ]);
 
     await this.groupRepository.increment({ id: groupId }, 'currentRound', 1);
-    await this.membershipRepository.update({ groupId }, { hasPaidCurrentRound: false });
+    await this.membershipRepository.update(
+      { groupId },
+      { hasPaidCurrentRound: false },
+    );
 
     if (payoutUserId) {
       await this.membershipRepository.update(

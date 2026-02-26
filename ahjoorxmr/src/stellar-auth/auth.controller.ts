@@ -27,7 +27,9 @@ export class AuthController {
   async challenge(
     @Body() dto: ChallengeRequestDto,
   ): Promise<ChallengeResponseDto> {
-    const challenge = await this.authService.generateChallenge(dto.walletAddress);
+    const challenge = await this.authService.generateChallenge(
+      dto.walletAddress,
+    );
     return { challenge };
   }
 

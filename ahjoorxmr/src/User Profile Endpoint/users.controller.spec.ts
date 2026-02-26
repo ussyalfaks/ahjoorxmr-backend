@@ -65,7 +65,10 @@ describe('UsersController', () => {
   describe('updateMe()', () => {
     it('calls upsertByWalletAddress and returns a UserResponseDto', async () => {
       const req = { user: { walletAddress: '0xABC123' } };
-      const dto: UpdateUserDto = { displayName: 'Bob', email: 'bob@example.com' };
+      const dto: UpdateUserDto = {
+        displayName: 'Bob',
+        email: 'bob@example.com',
+      };
 
       const result = await controller.updateMe(req, dto);
 

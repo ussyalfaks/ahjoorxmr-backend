@@ -28,7 +28,10 @@ export class ContributionFactory {
     contribution.roundNumber = roundNumber;
     contribution.amount = group.contributionAmount;
     contribution.transactionHash = this.generateTransactionHash();
-    contribution.timestamp = this.generateTimestamp(roundNumber, group.roundDuration);
+    contribution.timestamp = this.generateTimestamp(
+      roundNumber,
+      group.roundDuration,
+    );
     return contribution;
   }
 

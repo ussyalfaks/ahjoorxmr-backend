@@ -21,8 +21,12 @@ export class FileValidationService {
     'image/webp': [0x52, 0x49, 0x46, 0x46], // RIFF
     'application/pdf': [0x25, 0x50, 0x44, 0x46], // %PDF
     'application/zip': [0x50, 0x4b, 0x03, 0x04],
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [0x50, 0x4b, 0x03, 0x04], // DOCX
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [0x50, 0x4b, 0x03, 0x04], // XLSX
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [
+      0x50, 0x4b, 0x03, 0x04,
+    ], // DOCX
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [
+      0x50, 0x4b, 0x03, 0x04,
+    ], // XLSX
   };
 
   /**
@@ -42,7 +46,10 @@ export class FileValidationService {
     }
 
     // Check MIME type
-    if (options.allowedMimeTypes && !options.allowedMimeTypes.includes(file.mimetype)) {
+    if (
+      options.allowedMimeTypes &&
+      !options.allowedMimeTypes.includes(file.mimetype)
+    ) {
       errors.push(
         `MIME type ${file.mimetype} is not allowed. Allowed types: ${options.allowedMimeTypes.join(', ')}`,
       );
@@ -60,9 +67,14 @@ export class FileValidationService {
 
     // Validate magic numbers (file signature)
     if (options.requireMagicNumber !== false) {
-      const magicNumberValid = this.validateMagicNumber(file.buffer, file.mimetype);
+      const magicNumberValid = this.validateMagicNumber(
+        file.buffer,
+        file.mimetype,
+      );
       if (!magicNumberValid) {
-        errors.push('File content does not match declared MIME type (magic number mismatch)');
+        errors.push(
+          'File content does not match declared MIME type (magic number mismatch)',
+        );
       }
     }
 
@@ -77,7 +89,7 @@ export class FileValidationService {
    */
   validateMagicNumber(buffer: Buffer, mimeType: string): boolean {
     const expected = this.MAGIC_NUMBERS[mimeType];
-    
+
     if (!expected) {
       // If we don't have magic numbers for this type, skip validation
       return true;
@@ -97,11 +109,11 @@ export class FileValidationService {
    */
   private validateWebP(buffer: Buffer): boolean {
     if (buffer.length < 12) return false;
-    
+
     // Check RIFF header
     const riff = buffer.slice(0, 4);
     if (riff.toString() !== 'RIFF') return false;
-    
+
     // Check WEBP signature at offset 8
     const webp = buffer.slice(8, 12);
     return webp.toString() === 'WEBP';
@@ -111,7 +123,9 @@ export class FileValidationService {
    * Get file extension from filename
    */
   private getExtension(filename: string): string {
-    return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2).toLowerCase();
+    return filename
+      .slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2)
+      .toLowerCase();
   }
 
   /**
@@ -143,17 +157,17 @@ export class FileValidationService {
   sanitizeFilename(filename: string): string {
     // Remove path separators and null bytes
     let sanitized = filename.replace(/[\/\\:\*\?"<>\|]/g, '_');
-    
+
     // Remove any leading dots
     sanitized = sanitized.replace(/^\.+/, '');
-    
+
     // Limit length
     if (sanitized.length > 255) {
       const ext = this.getExtension(sanitized);
       const nameWithoutExt = sanitized.slice(0, -(ext.length + 1));
       sanitized = nameWithoutExt.slice(0, 255 - ext.length - 1) + '.' + ext;
     }
-    
+
     return sanitized;
   }
 
@@ -162,11 +176,11 @@ export class FileValidationService {
    */
   formatFileSize(bytes: number): string {
     if (bytes === 0) return '0 Bytes';
-    
+
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 }

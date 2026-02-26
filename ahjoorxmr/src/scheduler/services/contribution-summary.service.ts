@@ -74,7 +74,7 @@ export class ContributionSummaryService {
           totalContributions: contributions.length,
           totalAmount: totalAmount.toString(),
           memberCount,
-          contributions: contributions.map(c => ({
+          contributions: contributions.map((c) => ({
             userId: c.userId,
             walletAddress: c.walletAddress,
             amount: c.amount,
@@ -83,7 +83,9 @@ export class ContributionSummaryService {
         });
       }
 
-      this.logger.log(`Generated ${summaries.length} weekly contribution summaries`);
+      this.logger.log(
+        `Generated ${summaries.length} weekly contribution summaries`,
+      );
       return summaries;
     } catch (error) {
       this.logger.error('Failed to generate weekly summaries:', error);
@@ -95,7 +97,9 @@ export class ContributionSummaryService {
    * Send contribution summary to group members
    * In a real implementation, this would integrate with a notification service
    */
-  async sendSummariesToMembers(summaries: ContributionSummary[]): Promise<void> {
+  async sendSummariesToMembers(
+    summaries: ContributionSummary[],
+  ): Promise<void> {
     for (const summary of summaries) {
       // Get all members of the group
       const memberships = await this.membershipRepository.find({

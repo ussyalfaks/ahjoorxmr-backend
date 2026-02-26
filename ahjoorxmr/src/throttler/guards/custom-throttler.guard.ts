@@ -75,7 +75,9 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
     );
 
     if (allowBypass && this.trustedIpService.isTrustedIp(ip)) {
-      this.logger.log(`Trusted IP ${ip} bypassing rate limit for ${request.path}`);
+      this.logger.log(
+        `Trusted IP ${ip} bypassing rate limit for ${request.path}`,
+      );
       return true;
     }
 
@@ -98,8 +100,9 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
       // Handle rate limit exceeded
       if (error instanceof ThrottlerException) {
         // Increment violation counter
-        const { count, shouldBlock } = await this.trustedIpService.incrementViolations(ip);
-        
+        const { count, shouldBlock } =
+          await this.trustedIpService.incrementViolations(ip);
+
         this.logger.warn(
           `Rate limit exceeded for IP ${ip} on ${request.path} (${count} violations)`,
         );
@@ -109,7 +112,8 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
           throw new HttpException(
             {
               statusCode: HttpStatus.FORBIDDEN,
-              message: 'Too many rate limit violations. Your IP has been temporarily blocked.',
+              message:
+                'Too many rate limit violations. Your IP has been temporarily blocked.',
               error: 'Forbidden',
               violations: count,
             },
@@ -125,7 +129,9 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
               statusCode: HttpStatus.TOO_MANY_REQUESTS,
               message: customMessage,
               error: 'Too Many Requests',
-              retryAfter: customConfig?.ttl ? Math.ceil(customConfig.ttl / 1000) : 60,
+              retryAfter: customConfig?.ttl
+                ? Math.ceil(customConfig.ttl / 1000)
+                : 60,
             },
             HttpStatus.TOO_MANY_REQUESTS,
           );
@@ -146,7 +152,7 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
     // Check X-Forwarded-For header (proxy/load balancer)
     const forwardedFor = req.headers['x-forwarded-for'];
     if (forwardedFor) {
-      const ips = (forwardedFor as string).split(',').map(ip => ip.trim());
+      const ips = (forwardedFor as string).split(',').map((ip) => ip.trim());
       return ips[0]; // Use the first IP (client's real IP)
     }
 
@@ -172,7 +178,7 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
    */
   protected async getTracker(req: Request): Promise<string> {
     const user = (req as any).user;
-    
+
     // Use user ID if authenticated
     if (user && user.id) {
       return `user:${user.id}`;
@@ -188,7 +194,7 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
    */
   protected getThrottlerLimit(context: ExecutionContext): number {
     const request = context.switchToHttp().getRequest();
-    
+
     // Check for custom configuration
     const customConfig = this.reflector.getAllAndOverride<RateLimitConfig>(
       THROTTLE_CONFIG_KEY,
@@ -200,7 +206,7 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
     }
 
     // Check if user is authenticated
-    const user = (request as any).user;
+    const user = request.user;
     if (user && user.id) {
       return 200; // Higher limit for authenticated users
     }

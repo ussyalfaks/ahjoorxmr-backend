@@ -26,4 +26,4 @@ import { ConfigModule } from '@nestjs/config';
   providers: [ContributionsService, WinstonLogger, ApiKeyGuard, JwtAuthGuard],
   exports: [ContributionsService],
 })
-export class ContributionsModule { }
+export class ContributionsModule {}

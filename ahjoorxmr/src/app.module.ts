@@ -29,7 +29,7 @@ import { SeedModule } from './database/seeds/seed.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    
+
     // TypeORM configuration with PostgreSQL
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -40,10 +40,8 @@ import { SeedModule } from './database/seeds/seed.module';
           type: 'postgres',
           host: configService.get<string>('DB_HOST') || 'localhost',
           port: parseInt(configService.get<string>('DB_PORT') || '5432', 10),
-          username:
-            configService.get<string>('DB_USERNAME') || 'postgres',
-          password:
-            configService.get<string>('DB_PASSWORD') || 'postgres',
+          username: configService.get<string>('DB_USERNAME') || 'postgres',
+          password: configService.get<string>('DB_PASSWORD') || 'postgres',
           database: configService.get<string>('DB_NAME') || 'ahjoorxmr',
           entities: [Membership, Group, User, Contribution, AuditLog],
           synchronize: isDevelopment, // Auto-create tables only in development
@@ -52,7 +50,7 @@ import { SeedModule } from './database/seeds/seed.module';
       },
       inject: [ConfigService],
     }),
-    
+
     // RedisModule for caching and session management
     RedisModule,
     CustomThrottlerModule,
@@ -71,4 +69,4 @@ import { SeedModule } from './database/seeds/seed.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}

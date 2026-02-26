@@ -27,9 +27,9 @@ export class DatabaseHealthService {
     try {
       // Simple query to check database responsiveness
       await this.dataSource.query('SELECT 1');
-      
+
       const responseTime = Date.now() - startTime;
-      
+
       return {
         isHealthy: true,
         responseTime,
@@ -40,7 +40,8 @@ export class DatabaseHealthService {
         },
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error('Database health check failed', error);
       return {
         isHealthy: false,
@@ -63,7 +64,7 @@ export class DatabaseHealthService {
 
       // Get pool statistics from the driver
       const driver = this.dataSource.driver as any;
-      
+
       if (driver.master && driver.master.pool) {
         const pool = driver.master.pool;
         return {

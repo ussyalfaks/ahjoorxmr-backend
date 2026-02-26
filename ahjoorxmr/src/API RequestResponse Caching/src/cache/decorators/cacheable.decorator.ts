@@ -1,7 +1,7 @@
-import { SetMetadata } from "@nestjs/common";
+import { SetMetadata } from '@nestjs/common';
 
-export const CACHE_KEY_METADATA = "cache:key";
-export const CACHE_TTL_METADATA = "cache:ttl";
+export const CACHE_KEY_METADATA = 'cache:key';
+export const CACHE_TTL_METADATA = 'cache:ttl';
 
 export interface CacheableOptions {
   keyPrefix?: string;

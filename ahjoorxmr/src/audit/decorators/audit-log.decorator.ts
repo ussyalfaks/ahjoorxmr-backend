@@ -7,5 +7,5 @@ export interface AuditLogOptions {
   resource: string;
 }
 
-export const AuditLog = (options: AuditLogOptions) => 
+export const AuditLog = (options: AuditLogOptions) =>
   SetMetadata(AUDIT_LOG_KEY, options);

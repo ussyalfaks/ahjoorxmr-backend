@@ -1,11 +1,7 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import {
-  QUEUE_NAMES,
-  JOB_NAMES,
-  BACKOFF_DELAYS,
-} from './queue.constants';
+import { QUEUE_NAMES, JOB_NAMES, BACKOFF_DELAYS } from './queue.constants';
 import {
   SendEmailJobData,
   SendNotificationEmailJobData,
@@ -44,7 +40,9 @@ export class EmailProcessor extends WorkerHost {
 
   private async handleSendEmail(job: Job<SendEmailJobData>): Promise<void> {
     const { to, subject, html, text, template, context } = job.data;
-    this.logger.log(`Sending email to=${JSON.stringify(to)} subject="${subject}"`);
+    this.logger.log(
+      `Sending email to=${JSON.stringify(to)} subject="${subject}"`,
+    );
 
     // TODO: inject and call your MailerService / nodemailer transport here
     // await this.mailerService.sendMail({ to, subject, html, text, template, context });
@@ -88,7 +86,11 @@ export class EmailProcessor extends WorkerHost {
       this.logger.error(
         `Email job [${job.name}] id=${job.id} exhausted all retries → moving to dead-letter queue`,
       );
-      await this.deadLetterService.moveToDeadLetter(job, error, QUEUE_NAMES.EMAIL);
+      await this.deadLetterService.moveToDeadLetter(
+        job,
+        error,
+        QUEUE_NAMES.EMAIL,
+      );
     }
   }
 
@@ -100,5 +102,7 @@ export class EmailProcessor extends WorkerHost {
 
 // Custom backoff strategy — used by BullMQ when backoff.type === 'custom'
 export function emailBackoffStrategy(attemptsMade: number): number {
-  return BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1];
+  return (
+    BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1]
+  );
 }

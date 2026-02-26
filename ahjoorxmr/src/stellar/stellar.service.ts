@@ -104,7 +104,8 @@ export class StellarService {
     contractAddress: string,
     method: string,
   ): Promise<unknown> {
-    const resolvedContractAddress = this.resolveContractAddress(contractAddress);
+    const resolvedContractAddress =
+      this.resolveContractAddress(contractAddress);
     this.validateConfiguration();
 
     try {
@@ -114,7 +115,9 @@ export class StellarService {
       );
       let operation: unknown;
       try {
-        const contract = new (StellarSdk as any).Contract(resolvedContractAddress);
+        const contract = new (StellarSdk as any).Contract(
+          resolvedContractAddress,
+        );
         operation = contract.call(method);
       } catch {
         operation = {
@@ -180,7 +183,10 @@ export class StellarService {
       }
 
       try {
-        const scVal = (StellarSdk as any).xdr.ScVal.fromXDR(rawResult, 'base64');
+        const scVal = (StellarSdk as any).xdr.ScVal.fromXDR(
+          rawResult,
+          'base64',
+        );
         return (StellarSdk as any).scValToNative(scVal);
       } catch {
         return rawResult;
@@ -195,7 +201,10 @@ export class StellarService {
     }
 
     const directMethod = String(
-      transaction.functionName ?? transaction.function_name ?? transaction.method ?? '',
+      transaction.functionName ??
+        transaction.function_name ??
+        transaction.method ??
+        '',
     ).toLowerCase();
     const directContract = String(
       transaction.contractAddress ??
@@ -212,7 +221,9 @@ export class StellarService {
     }
 
     const envelopeXdr =
-      transaction.envelopeXdr ?? transaction.envelope_xdr ?? transaction.envelope;
+      transaction.envelopeXdr ??
+      transaction.envelope_xdr ??
+      transaction.envelope;
     if (!envelopeXdr || typeof envelopeXdr !== 'string') {
       return false;
     }

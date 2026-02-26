@@ -131,11 +131,17 @@ export class EventSyncProcessor extends WorkerHost {
   // ---------------------------------------------------------------------------
   // PROCESS_TRANSFER_EVENT
   // ---------------------------------------------------------------------------
-  async handleTransferEvent(
-    job: Job<TransferEventPayload>,
-  ): Promise<void> {
-    const { from, to, amount, transactionHash, blockNumber, contractAddress, chainId, contributionId } =
-      job.data;
+  async handleTransferEvent(job: Job<TransferEventPayload>): Promise<void> {
+    const {
+      from,
+      to,
+      amount,
+      transactionHash,
+      blockNumber,
+      contractAddress,
+      chainId,
+      contributionId,
+    } = job.data;
 
     this.logger.log(
       `Processing Transfer event: from=${from} to=${to} amount=${amount} tx=${transactionHash}`,

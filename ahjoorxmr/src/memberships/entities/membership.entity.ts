@@ -39,6 +39,9 @@ export class Membership extends BaseEntity {
   @Column('boolean', { default: false })
   hasPaidCurrentRound: boolean;
 
+  @Column('int', { default: 0 })
+  contributionsMade: number;
+
   @Column('varchar', { length: 255, nullable: true })
   transactionHash: string | null;
 
