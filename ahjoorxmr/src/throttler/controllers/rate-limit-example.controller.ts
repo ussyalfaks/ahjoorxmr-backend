@@ -10,7 +10,7 @@ import {
 
 /**
  * Example controller demonstrating various rate limiting strategies
- * 
+ *
  * This controller shows how to use different rate limiting decorators
  * and presets for different types of endpoints.
  */
@@ -23,7 +23,8 @@ export class RateLimitExampleController {
   @Get('default')
   @ApiOperation({
     summary: 'Default rate limiting',
-    description: 'Uses global rate limits: 100 req/min anonymous, 200 req/min authenticated',
+    description:
+      'Uses global rate limits: 100 req/min anonymous, 200 req/min authenticated',
   })
   @ApiResponse({ status: 200, description: 'Success' })
   @ApiResponse({ status: 429, description: 'Too Many Requests' })
@@ -186,11 +187,31 @@ export class RateLimitExampleController {
     schema: {
       example: {
         presets: {
-          VERY_STRICT: { ttl: 300000, limit: 3, description: 'For password reset, account deletion' },
-          STRICT: { ttl: 60000, limit: 5, description: 'For authentication endpoints' },
-          MODERATE: { ttl: 60000, limit: 20, description: 'For sensitive operations' },
-          DEFAULT: { ttl: 60000, limit: 100, description: 'For general endpoints' },
-          LENIENT: { ttl: 60000, limit: 200, description: 'For authenticated users' },
+          VERY_STRICT: {
+            ttl: 300000,
+            limit: 3,
+            description: 'For password reset, account deletion',
+          },
+          STRICT: {
+            ttl: 60000,
+            limit: 5,
+            description: 'For authentication endpoints',
+          },
+          MODERATE: {
+            ttl: 60000,
+            limit: 20,
+            description: 'For sensitive operations',
+          },
+          DEFAULT: {
+            ttl: 60000,
+            limit: 100,
+            description: 'For general endpoints',
+          },
+          LENIENT: {
+            ttl: 60000,
+            limit: 200,
+            description: 'For authenticated users',
+          },
           PUBLIC: { ttl: 60000, limit: 500, description: 'For public data' },
           BURST: { ttl: 1000, limit: 10, description: 'Burst protection' },
         },

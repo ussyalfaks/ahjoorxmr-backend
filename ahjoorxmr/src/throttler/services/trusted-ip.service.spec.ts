@@ -87,7 +87,11 @@ describe('TrustedIpService', () => {
     it('should add IP to trusted list with TTL', async () => {
       await service.addTrustedIp('1.2.3.4', 3600);
 
-      expect(mockRedis.setex).toHaveBeenCalledWith('trusted_ip:1.2.3.4', 3600, '1');
+      expect(mockRedis.setex).toHaveBeenCalledWith(
+        'trusted_ip:1.2.3.4',
+        3600,
+        '1',
+      );
       expect(service.isTrustedIp('1.2.3.4')).toBe(true);
     });
   });
@@ -224,12 +228,8 @@ describe('TrustedIpService', () => {
         'blocked_ip:1.2.3.4',
         'blocked_ip:5.6.7.8',
       ] as any);
-      mockRedis.get
-        .mockResolvedValueOnce('Spam')
-        .mockResolvedValueOnce('DDoS');
-      mockRedis.ttl
-        .mockResolvedValueOnce(3600)
-        .mockResolvedValueOnce(7200);
+      mockRedis.get.mockResolvedValueOnce('Spam').mockResolvedValueOnce('DDoS');
+      mockRedis.ttl.mockResolvedValueOnce(3600).mockResolvedValueOnce(7200);
 
       const result = await service.getBlockedIps();
 

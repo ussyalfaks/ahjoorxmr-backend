@@ -14,12 +14,9 @@ import { NotificationsModule } from '../notification/notifications.module';
  * Smart contract interactions are handled by a separate Stellar service.
  */
 @Module({
-    imports: [
-        TypeOrmModule.forFeature([Group, Membership]),
-        NotificationsModule,
-    ],
-    controllers: [GroupsController],
-    providers: [GroupsService, WinstonLogger, JwtAuthGuard],
-    exports: [GroupsService],
+  imports: [TypeOrmModule.forFeature([Group, Membership]), NotificationsModule],
+  controllers: [GroupsController],
+  providers: [GroupsService, WinstonLogger, JwtAuthGuard],
+  exports: [GroupsService],
 })
-export class GroupsModule { }
+export class GroupsModule {}

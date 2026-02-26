@@ -34,13 +34,13 @@ export const throttlerConfig: ThrottlerModuleOptions = {
   ],
   // Error message customization
   errorMessage: 'Too Many Requests',
-  
+
   // Skip successful requests in counting (optional)
   skipSuccessfulRequests: false,
-  
+
   // Skip failed requests in counting (optional)
   skipFailedRequests: false,
-  
+
   // Ignore user agents (bots, health checks, etc.)
   ignoreUserAgents: [
     /googlebot/i,
@@ -65,7 +65,7 @@ export function getThrottlerConfig(): ThrottlerModuleOptions {
   if (env === 'development') {
     return {
       ...throttlerConfig,
-      throttlers: throttlerConfig.throttlers.map(t => ({
+      throttlers: throttlerConfig.throttlers.map((t) => ({
         ...t,
         limit: t.limit * 2, // Double limits in development
       })),

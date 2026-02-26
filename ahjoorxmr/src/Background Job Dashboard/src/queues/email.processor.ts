@@ -1,7 +1,7 @@
-import { Processor, WorkerHost } from "@nestjs/bullmq";
-import { Job } from "bullmq";
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job } from 'bullmq';
 
-@Processor("email")
+@Processor('email')
 export class EmailProcessor extends WorkerHost {
   async process(job: Job): Promise<any> {
     const { to, subject, body } = job.data;

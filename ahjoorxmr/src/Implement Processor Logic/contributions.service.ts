@@ -23,12 +23,25 @@ export class ContributionsService {
     private readonly contributionRepo: Repository<Contribution>,
   ) {}
 
-  async recordContributionFromTransfer(dto: RecordContributionDto): Promise<Contribution> {
-    const { from, to, amount, transactionHash, blockNumber, contractAddress, chainId, contributionId } = dto;
+  async recordContributionFromTransfer(
+    dto: RecordContributionDto,
+  ): Promise<Contribution> {
+    const {
+      from,
+      to,
+      amount,
+      transactionHash,
+      blockNumber,
+      contractAddress,
+      chainId,
+      contributionId,
+    } = dto;
 
     // 1. If a specific contributionId was provided, update the existing record
     if (contributionId) {
-      const existing = await this.contributionRepo.findOne({ where: { id: contributionId } });
+      const existing = await this.contributionRepo.findOne({
+        where: { id: contributionId },
+      });
       if (existing) {
         existing.status = 'confirmed';
         existing.transactionHash = transactionHash;
@@ -41,9 +54,13 @@ export class ContributionsService {
     }
 
     // 2. Check idempotency by transactionHash
-    const byTxHash = await this.contributionRepo.findOne({ where: { transactionHash } });
+    const byTxHash = await this.contributionRepo.findOne({
+      where: { transactionHash },
+    });
     if (byTxHash) {
-      this.logger.log(`Contribution for tx=${transactionHash} already exists (id=${byTxHash.id})`);
+      this.logger.log(
+        `Contribution for tx=${transactionHash} already exists (id=${byTxHash.id})`,
+      );
       return byTxHash;
     }
 
@@ -61,7 +78,9 @@ export class ContributionsService {
     });
 
     const saved = await this.contributionRepo.save(contribution);
-    this.logger.log(`Created new contribution id=${saved.id} for tx=${transactionHash}`);
+    this.logger.log(
+      `Created new contribution id=${saved.id} for tx=${transactionHash}`,
+    );
     return saved;
   }
 }

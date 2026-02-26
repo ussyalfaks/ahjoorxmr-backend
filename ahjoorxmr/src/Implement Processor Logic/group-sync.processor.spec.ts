@@ -65,12 +65,18 @@ describe('GroupSyncProcessor', () => {
       };
 
       groupRepo.findOne.mockResolvedValue(group);
-      stellarService.getGroupState.mockResolvedValue({ status: 'active', currentRound: 3 });
+      stellarService.getGroupState.mockResolvedValue({
+        status: 'active',
+        currentRound: 3,
+      });
 
       const updatedGroup = { ...group, status: 'active', currentRound: 3 };
       groupRepo.save.mockResolvedValue(updatedGroup as Group);
 
-      const job = makeJob<SyncGroupStatePayload>(GROUP_SYNC_JOBS.SYNC_GROUP_STATE, payload);
+      const job = makeJob<SyncGroupStatePayload>(
+        GROUP_SYNC_JOBS.SYNC_GROUP_STATE,
+        payload,
+      );
       const result = await processor.handleSyncGroupState(job);
 
       expect(stellarService.getGroupState).toHaveBeenCalledWith(
@@ -86,8 +92,13 @@ describe('GroupSyncProcessor', () => {
     it('throws if group is not found in DB', async () => {
       groupRepo.findOne.mockResolvedValue(null);
 
-      const job = makeJob<SyncGroupStatePayload>(GROUP_SYNC_JOBS.SYNC_GROUP_STATE, payload);
-      await expect(processor.handleSyncGroupState(job)).rejects.toThrow('Group not found');
+      const job = makeJob<SyncGroupStatePayload>(
+        GROUP_SYNC_JOBS.SYNC_GROUP_STATE,
+        payload,
+      );
+      await expect(processor.handleSyncGroupState(job)).rejects.toThrow(
+        'Group not found',
+      );
     });
 
     it('propagates StellarService errors so the job is retried', async () => {
@@ -104,8 +115,13 @@ describe('GroupSyncProcessor', () => {
       groupRepo.findOne.mockResolvedValue(group);
       stellarService.getGroupState.mockRejectedValue(new Error('RPC timeout'));
 
-      const job = makeJob<SyncGroupStatePayload>(GROUP_SYNC_JOBS.SYNC_GROUP_STATE, payload);
-      await expect(processor.handleSyncGroupState(job)).rejects.toThrow('RPC timeout');
+      const job = makeJob<SyncGroupStatePayload>(
+        GROUP_SYNC_JOBS.SYNC_GROUP_STATE,
+        payload,
+      );
+      await expect(processor.handleSyncGroupState(job)).rejects.toThrow(
+        'RPC timeout',
+      );
       expect(groupRepo.save).not.toHaveBeenCalled();
     });
   });
@@ -115,7 +131,9 @@ describe('GroupSyncProcessor', () => {
   describe('process (dispatcher)', () => {
     it('throws on unknown job names', async () => {
       const job = makeJob('MYSTERY_JOB', {});
-      await expect(processor.process(job)).rejects.toThrow('Unknown job name: MYSTERY_JOB');
+      await expect(processor.process(job)).rejects.toThrow(
+        'Unknown job name: MYSTERY_JOB',
+      );
     });
   });
 });

@@ -43,7 +43,9 @@ describe('StorageService', () => {
 
     const mockS3Adapter = {
       upload: jest.fn().mockResolvedValue('http://example.com/file.jpg'),
-      getSignedUrl: jest.fn().mockResolvedValue('http://example.com/signed-url'),
+      getSignedUrl: jest
+        .fn()
+        .mockResolvedValue('http://example.com/signed-url'),
       delete: jest.fn().mockResolvedValue(undefined),
       getFileStream: jest.fn(),
       exists: jest.fn().mockResolvedValue(true),
@@ -51,7 +53,9 @@ describe('StorageService', () => {
 
     const mockLocalAdapter = {
       upload: jest.fn().mockResolvedValue('http://localhost:3000/file.jpg'),
-      getSignedUrl: jest.fn().mockResolvedValue('http://localhost:3000/signed-url'),
+      getSignedUrl: jest
+        .fn()
+        .mockResolvedValue('http://localhost:3000/signed-url'),
       delete: jest.fn().mockResolvedValue(undefined),
       getFileStream: jest.fn(),
       exists: jest.fn().mockResolvedValue(true),
@@ -101,8 +105,12 @@ describe('StorageService', () => {
     );
     s3Adapter = module.get<S3StorageAdapter>(S3StorageAdapter);
     localAdapter = module.get<LocalStorageAdapter>(LocalStorageAdapter);
-    compressionService = module.get<ImageCompressionService>(ImageCompressionService);
-    validationService = module.get<FileValidationService>(FileValidationService);
+    compressionService = module.get<ImageCompressionService>(
+      ImageCompressionService,
+    );
+    validationService = module.get<FileValidationService>(
+      FileValidationService,
+    );
   });
 
   describe('uploadFile', () => {
@@ -125,10 +133,18 @@ describe('StorageService', () => {
         errors: [],
       });
 
-      jest.spyOn(compressionService, 'autoOrient').mockResolvedValue(mockFile.buffer);
-      jest.spyOn(compressionService, 'compress').mockResolvedValue(mockFile.buffer);
+      jest
+        .spyOn(compressionService, 'autoOrient')
+        .mockResolvedValue(mockFile.buffer);
+      jest
+        .spyOn(compressionService, 'compress')
+        .mockResolvedValue(mockFile.buffer);
 
-      const result = await service.uploadFile(mockFile, FileType.PROFILE_PICTURE, 'user123');
+      const result = await service.uploadFile(
+        mockFile,
+        FileType.PROFILE_PICTURE,
+        'user123',
+      );
 
       expect(result).toEqual(mockFileMetadata);
       expect(fileMetadataRepo.save).toHaveBeenCalled();
@@ -174,7 +190,9 @@ describe('StorageService', () => {
 
       jest.spyOn(validationService, 'validate').mockReturnValue({
         isValid: false,
-        errors: [`File size ${mockFile.size} exceeds maximum allowed size ${10 * 1024 * 1024}`],
+        errors: [
+          `File size ${mockFile.size} exceeds maximum allowed size ${10 * 1024 * 1024}`,
+        ],
       });
 
       await expect(
@@ -185,7 +203,10 @@ describe('StorageService', () => {
 
   describe('getSignedUrl', () => {
     it('should generate a signed URL for an existing file', async () => {
-      const result = await service.getSignedUrl('123e4567-e89b-12d3-a456-426614174000', 3600);
+      const result = await service.getSignedUrl(
+        '123e4567-e89b-12d3-a456-426614174000',
+        3600,
+      );
 
       expect(result).toBeDefined();
       expect(typeof result).toBe('string');
@@ -202,7 +223,9 @@ describe('StorageService', () => {
 
   describe('getFileMetadata', () => {
     it('should return file metadata for existing file', async () => {
-      const result = await service.getFileMetadata('123e4567-e89b-12d3-a456-426614174000');
+      const result = await service.getFileMetadata(
+        '123e4567-e89b-12d3-a456-426614174000',
+      );
 
       expect(result).toEqual(mockFileMetadata);
     });
@@ -210,9 +233,9 @@ describe('StorageService', () => {
     it('should throw BadRequestException for non-existent file', async () => {
       jest.spyOn(fileMetadataRepo, 'findOne').mockResolvedValue(null);
 
-      await expect(
-        service.getFileMetadata('non-existent-id'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.getFileMetadata('non-existent-id')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -227,9 +250,9 @@ describe('StorageService', () => {
     it('should throw BadRequestException for non-existent file', async () => {
       jest.spyOn(fileMetadataRepo, 'findOne').mockResolvedValue(null);
 
-      await expect(
-        service.deleteFile('non-existent-id'),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.deleteFile('non-existent-id')).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 

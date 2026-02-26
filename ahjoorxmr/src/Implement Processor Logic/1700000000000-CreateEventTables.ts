@@ -9,7 +9,13 @@ export class CreateEventTables1700000000000 implements MigrationInterface {
       new Table({
         name: 'on_chain_events',
         columns: [
-          { name: 'id', type: 'uuid', isPrimary: true, generationStrategy: 'uuid', default: 'uuid_generate_v4()' },
+          {
+            name: 'id',
+            type: 'uuid',
+            isPrimary: true,
+            generationStrategy: 'uuid',
+            default: 'uuid_generate_v4()',
+          },
           { name: 'event_name', type: 'varchar' },
           { name: 'transaction_hash', type: 'varchar' },
           { name: 'block_number', type: 'bigint' },
@@ -36,7 +42,13 @@ export class CreateEventTables1700000000000 implements MigrationInterface {
       new Table({
         name: 'approval_events',
         columns: [
-          { name: 'id', type: 'uuid', isPrimary: true, generationStrategy: 'uuid', default: 'uuid_generate_v4()' },
+          {
+            name: 'id',
+            type: 'uuid',
+            isPrimary: true,
+            generationStrategy: 'uuid',
+            default: 'uuid_generate_v4()',
+          },
           { name: 'owner_address', type: 'varchar' },
           { name: 'spender_address', type: 'varchar' },
           { name: 'amount', type: 'numeric', precision: 78, scale: 0 },

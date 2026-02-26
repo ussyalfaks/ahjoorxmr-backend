@@ -1,5 +1,5 @@
-import { Injectable } from "@nestjs/common";
-import { CacheService } from "../cache/cache.service";
+import { Injectable } from '@nestjs/common';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class GroupsService {
@@ -8,8 +8,8 @@ export class GroupsService {
   async findAll() {
     // Simulate database query
     return [
-      { id: "1", name: "Group 1", members: 10 },
-      { id: "2", name: "Group 2", members: 5 },
+      { id: '1', name: 'Group 1', members: 10 },
+      { id: '2', name: 'Group 2', members: 5 },
     ];
   }
 
@@ -20,7 +20,7 @@ export class GroupsService {
 
   async create(createGroupDto: any) {
     // Simulate database insert
-    return { id: "3", ...createGroupDto };
+    return { id: '3', ...createGroupDto };
   }
 
   async update(id: string, updateGroupDto: any) {
@@ -39,6 +39,6 @@ export class GroupsService {
       await this.cacheService.delPattern(`groups:detail:*:*/${groupId}`);
     }
     // Invalidate all group list caches
-    await this.cacheService.delPattern("groups:list:*");
+    await this.cacheService.delPattern('groups:list:*');
   }
 }

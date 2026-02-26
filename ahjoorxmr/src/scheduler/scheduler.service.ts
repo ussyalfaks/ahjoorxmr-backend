@@ -33,13 +33,10 @@ export class SchedulerService {
     const result = await this.lockService.withLock(
       taskName,
       async () => {
-        return await this.executeWithRetry(
-          async () => {
-            const archivedCount = await this.auditLogService.archiveOldLogs(90);
-            return { archivedCount };
-          },
-          taskName,
-        );
+        return await this.executeWithRetry(async () => {
+          const archivedCount = await this.auditLogService.archiveOldLogs(90);
+          return { archivedCount };
+        }, taskName);
       },
       600, // 10 minutes lock TTL
     );
@@ -76,14 +73,14 @@ export class SchedulerService {
     const result = await this.lockService.withLock(
       taskName,
       async () => {
-        return await this.executeWithRetry(
-          async () => {
-            const summaries = await this.contributionSummaryService.generateWeeklySummaries();
-            await this.contributionSummaryService.sendSummariesToMembers(summaries);
-            return { summaryCount: summaries.length };
-          },
-          taskName,
-        );
+        return await this.executeWithRetry(async () => {
+          const summaries =
+            await this.contributionSummaryService.generateWeeklySummaries();
+          await this.contributionSummaryService.sendSummariesToMembers(
+            summaries,
+          );
+          return { summaryCount: summaries.length };
+        }, taskName);
       },
       600, // 10 minutes lock TTL
     );
@@ -114,14 +111,13 @@ export class SchedulerService {
     const result = await this.lockService.withLock(
       taskName,
       async () => {
-        return await this.executeWithRetry(
-          async () => {
-            const updatedCount = await this.groupStatusService.updateGroupStatuses();
-            const inactiveGroups = await this.groupStatusService.checkInactiveGroups();
-            return { updatedCount, inactiveGroupCount: inactiveGroups.length };
-          },
-          taskName,
-        );
+        return await this.executeWithRetry(async () => {
+          const updatedCount =
+            await this.groupStatusService.updateGroupStatuses();
+          const inactiveGroups =
+            await this.groupStatusService.checkInactiveGroups();
+          return { updatedCount, inactiveGroupCount: inactiveGroups.length };
+        }, taskName);
       },
       300, // 5 minutes lock TTL
     );
@@ -173,6 +169,6 @@ export class SchedulerService {
    * Sleep utility for retry delays
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

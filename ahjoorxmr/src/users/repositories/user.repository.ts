@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere, FindManyOptions } from 'typeorm';
+import { Repository, FindOptionsWhere, FindManyOptions, IsNull } from 'typeorm';
 import { User } from '../entities/user.entity';
+import { MembershipStatus } from '../../memberships/entities/membership-status.enum';
 
 /**
  * Base repository with common operations
@@ -44,7 +45,7 @@ export class UserRepository extends Repository<User> {
       ...options,
       where: {
         isActive: true,
-        bannedAt: null as any,
+        bannedAt: IsNull(),
         ...((options?.where as FindOptionsWhere<User>) || {}),
       },
     });
@@ -96,7 +97,7 @@ export class UserRepository extends Repository<User> {
     }
 
     const activeGroups = user.memberships.filter(
-      (m) => m.status === 'active',
+      (m) => m.status === MembershipStatus.ACTIVE,
     ).length;
 
     const totalContributions = user.memberships.reduce(
@@ -167,11 +168,16 @@ export class UserRepository extends Repository<User> {
     page: number = 1,
     limit: number = 10,
     filters?: Partial<User>,
-  ): Promise<{ users: User[]; total: number; page: number; totalPages: number }> {
+  ): Promise<{
+    users: User[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
     const skip = (page - 1) * limit;
 
     const [users, total] = await this.repository.findAndCount({
-      where: filters,
+      where: filters as FindOptionsWhere<User>,
       skip,
       take: limit,
       order: { createdAt: 'DESC' },
@@ -188,7 +194,7 @@ export class UserRepository extends Repository<User> {
   /**
    * Soft delete user (mark as inactive)
    */
-  async softRemove(userId: string): Promise<void> {
+  async softDeleteUser(userId: string): Promise<void> {
     await this.repository.update(userId, {
       isActive: false,
       bannedAt: new Date(),

@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryFailedError } from 'typeorm';
 import { Contribution } from './entities/contribution.entity';
@@ -23,7 +27,7 @@ export class ContributionsService {
     private readonly logger: WinstonLogger,
     private readonly stellarService: StellarService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   /**
    * Validates that a group exists.
@@ -33,7 +37,9 @@ export class ContributionsService {
    * @private
    */
   private async validateGroupExists(groupId: string): Promise<void> {
-    const group = await this.groupRepository.findOne({ where: { id: groupId } });
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+    });
 
     if (!group) {
       this.logger.warn(`Group ${groupId} not found`, 'ContributionsService');
@@ -66,15 +72,21 @@ export class ContributionsService {
       await this.validateGroupExists(groupId);
 
       // Verify contribution if enabled
-      const shouldVerify = this.configService.get<boolean>('VERIFY_CONTRIBUTIONS', true);
+      const shouldVerify = this.configService.get<boolean>(
+        'VERIFY_CONTRIBUTIONS',
+        true,
+      );
       if (shouldVerify) {
-        const isValid = await this.stellarService.verifyContribution(transactionHash);
+        const isValid =
+          await this.stellarService.verifyContribution(transactionHash);
         if (!isValid) {
           this.logger.warn(
             `Contribution verification failed for transaction hash ${transactionHash}`,
             'ContributionsService',
           );
-          throw new BadRequestException('Transaction hash does not correspond to a valid contribution');
+          throw new BadRequestException(
+            'Transaction hash does not correspond to a valid contribution',
+          );
         }
         this.logger.log(
           `Contribution verification successful for transaction hash ${transactionHash}`,
@@ -92,14 +104,19 @@ export class ContributionsService {
           `Contribution with transaction hash ${transactionHash} already exists`,
           'ContributionsService',
         );
-        throw new ConflictException('Contribution with this transaction hash already exists');
+        throw new ConflictException(
+          'Contribution with this transaction hash already exists',
+        );
       }
 
       // Create contribution
-      const contribution = this.contributionRepository.create(createContributionDto);
+      const contribution = this.contributionRepository.create(
+        createContributionDto,
+      );
 
       // Save to database
-      const savedContribution = await this.contributionRepository.save(contribution);
+      const savedContribution =
+        await this.contributionRepository.save(contribution);
 
       this.logger.log(
         `Contribution created with id ${savedContribution.id} for user ${userId} in group ${groupId}`,
@@ -127,7 +144,9 @@ export class ContributionsService {
             error.stack,
             'ContributionsService',
           );
-          throw new ConflictException('Contribution with this transaction hash already exists');
+          throw new ConflictException(
+            'Contribution with this transaction hash already exists',
+          );
         }
 
         // Foreign key violation (invalid groupId or userId)
@@ -161,8 +180,21 @@ export class ContributionsService {
   async getGroupContributions(
     groupId: string,
     query: GetContributionsQueryDto,
-  ): Promise<{ data: Contribution[]; total: number; page: number; limit: number; totalPages: number }> {
-    const { page = 1, limit = 20, round, walletAddress, sortBy = 'timestamp', sortOrder = 'DESC' } = query;
+  ): Promise<{
+    data: Contribution[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const {
+      page = 1,
+      limit = 20,
+      round,
+      walletAddress,
+      sortBy = 'timestamp',
+      sortOrder = 'DESC',
+    } = query;
 
     this.logger.log(
       `Querying contributions for group ${groupId} with pagination: page=${page}, limit=${limit}, sortBy=${sortBy}, sortOrder=${sortOrder}${round ? `, round=${round}` : ''}${walletAddress ? `, walletAddress=${walletAddress}` : ''}`,
@@ -209,7 +241,10 @@ export class ContributionsService {
    * @param round - The round number to query
    * @returns Array of Contribution entities (empty if none found)
    */
-  async getRoundContributions(groupId: string, round: number): Promise<Contribution[]> {
+  async getRoundContributions(
+    groupId: string,
+    round: number,
+  ): Promise<Contribution[]> {
     this.logger.log(
       `Querying contributions for group ${groupId} and round ${round}`,
       'ContributionsService',

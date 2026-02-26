@@ -3,14 +3,14 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
-} from "@nestjs/common";
-import { Reflector } from "@nestjs/core";
-import { Observable, of, tap } from "rxjs";
-import { CacheService } from "../cache.service";
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Observable, of, tap } from 'rxjs';
+import { CacheService } from '../cache.service';
 import {
   CACHE_KEY_METADATA,
   CACHE_TTL_METADATA,
-} from "../decorators/cacheable.decorator";
+} from '../decorators/cacheable.decorator';
 
 @Injectable()
 export class CacheInterceptor implements NestInterceptor {
@@ -27,7 +27,7 @@ export class CacheInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse();
 
     // Only cache GET requests
-    if (request.method !== "GET") {
+    if (request.method !== 'GET') {
       return next.handle();
     }
 
@@ -46,7 +46,7 @@ export class CacheInterceptor implements NestInterceptor {
     }
 
     // Build cache key with user context
-    const userId = request.user?.id || "anonymous";
+    const userId = request.user?.id || 'anonymous';
     const cacheKey = `${keyPrefix}:${userId}:${request.url}`;
 
     // Try to get from cache
@@ -54,14 +54,14 @@ export class CacheInterceptor implements NestInterceptor {
 
     if (cachedData) {
       // Set Cache-Control headers
-      response.setHeader("X-Cache", "HIT");
-      response.setHeader("Cache-Control", `public, max-age=${ttl || 300}`);
+      response.setHeader('X-Cache', 'HIT');
+      response.setHeader('Cache-Control', `public, max-age=${ttl || 300}`);
       return of(cachedData);
     }
 
     // Cache miss - execute handler and cache result
-    response.setHeader("X-Cache", "MISS");
-    response.setHeader("Cache-Control", `public, max-age=${ttl || 300}`);
+    response.setHeader('X-Cache', 'MISS');
+    response.setHeader('Cache-Control', `public, max-age=${ttl || 300}`);
 
     return next.handle().pipe(
       tap(async (data) => {

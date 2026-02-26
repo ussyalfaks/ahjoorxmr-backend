@@ -3,7 +3,10 @@ import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { EventSyncProcessor, QUEUES } from './processors/event-sync.processor';
-import { GroupSyncProcessor, GROUP_SYNC_QUEUE } from './processors/group-sync.processor';
+import {
+  GroupSyncProcessor,
+  GROUP_SYNC_QUEUE,
+} from './processors/group-sync.processor';
 import { ContributionsService } from './contributions/contributions.service';
 import { StellarService } from './stellar/stellar.service';
 
@@ -50,7 +53,12 @@ const defaultJobOptions = {
     ),
 
     // ── TypeORM repositories ─────────────────────────────────────────────────
-    TypeOrmModule.forFeature([OnChainEvent, ApprovalEvent, Contribution, Group]),
+    TypeOrmModule.forFeature([
+      OnChainEvent,
+      ApprovalEvent,
+      Contribution,
+      Group,
+    ]),
   ],
   providers: [
     EventSyncProcessor,

@@ -24,10 +24,7 @@ export class GroupStatusService {
     try {
       // Get all groups that are not completed
       const groups = await this.groupRepository.find({
-        where: [
-          { status: 'PENDING' as any },
-          { status: 'ACTIVE' as any },
-        ],
+        where: [{ status: 'PENDING' as any }, { status: 'ACTIVE' as any }],
       });
 
       for (const group of groups) {

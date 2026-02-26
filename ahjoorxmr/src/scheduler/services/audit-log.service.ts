@@ -34,8 +34,10 @@ export class AuditLogService {
       });
 
       const count = result.affected || 0;
-      this.logger.log(`Archived ${count} audit logs older than ${daysOld} days`);
-      
+      this.logger.log(
+        `Archived ${count} audit logs older than ${daysOld} days`,
+      );
+
       return count;
     } catch (error) {
       this.logger.error('Failed to archive old logs:', error);
@@ -46,7 +48,10 @@ export class AuditLogService {
   /**
    * Get audit logs for a specific user
    */
-  async getLogsByUser(userId: string, limit: number = 100): Promise<AuditLog[]> {
+  async getLogsByUser(
+    userId: string,
+    limit: number = 100,
+  ): Promise<AuditLog[]> {
     return await this.auditLogRepository.find({
       where: { userId },
       order: { createdAt: 'DESC' },
@@ -57,7 +62,10 @@ export class AuditLogService {
   /**
    * Get audit logs for a specific group
    */
-  async getLogsByGroup(groupId: string, limit: number = 100): Promise<AuditLog[]> {
+  async getLogsByGroup(
+    groupId: string,
+    limit: number = 100,
+  ): Promise<AuditLog[]> {
     return await this.auditLogRepository.find({
       where: { groupId },
       order: { createdAt: 'DESC' },

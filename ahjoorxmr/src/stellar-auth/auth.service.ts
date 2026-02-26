@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import * as StellarSdk from '@stellar/stellar-sdk';
+import { RedisService } from '../common/redis/redis.service';
 import { UsersService } from '../users/users.service';
 import { JwtPayload } from './jwt.strategy';
 import { RedisService } from '../common/redis/redis.service';

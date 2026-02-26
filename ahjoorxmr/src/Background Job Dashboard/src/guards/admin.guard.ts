@@ -3,8 +3,8 @@ import {
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
-} from "@nestjs/common";
-import { Observable } from "rxjs";
+} from '@nestjs/common';
+import { Observable } from 'rxjs';
 
 @Injectable()
 export class AdminGuard implements CanActivate {
@@ -18,7 +18,7 @@ export class AdminGuard implements CanActivate {
     const isAdmin = this.validateAdmin(request);
 
     if (!isAdmin) {
-      throw new UnauthorizedException("Admin access required");
+      throw new UnauthorizedException('Admin access required');
     }
 
     return true;
@@ -27,7 +27,7 @@ export class AdminGuard implements CanActivate {
   private validateAdmin(request: any): boolean {
     // Example: Check for admin role in headers, JWT token, or session
     // Replace this with your actual authentication logic
-    const adminToken = request.headers["x-admin-token"];
-    return adminToken === "admin-secret-token"; // Replace with real validation
+    const adminToken = request.headers['x-admin-token'];
+    return adminToken === 'admin-secret-token'; // Replace with real validation
   }
 }

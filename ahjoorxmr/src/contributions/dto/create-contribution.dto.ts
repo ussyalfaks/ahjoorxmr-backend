@@ -1,4 +1,12 @@
-import { IsUUID, IsNotEmpty, IsString, MinLength, IsInt, Min, IsDate } from 'class-validator';
+import {
+  IsUUID,
+  IsNotEmpty,
+  IsString,
+  MinLength,
+  IsInt,
+  Min,
+  IsDate,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -41,7 +49,8 @@ export class CreateContributionDto {
   roundNumber: number;
 
   @ApiProperty({
-    description: 'Contribution amount (stored as string to avoid floating-point precision issues)',
+    description:
+      'Contribution amount (stored as string to avoid floating-point precision issues)',
     example: '100.50',
   })
   @IsString()

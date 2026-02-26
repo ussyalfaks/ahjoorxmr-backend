@@ -100,7 +100,9 @@ describe('UserRepository', () => {
     it('should return null if email not found', async () => {
       mockRepository.findOne.mockResolvedValue(null);
 
-      const result = await userRepository.findByEmail('nonexistent@example.com');
+      const result = await userRepository.findByEmail(
+        'nonexistent@example.com',
+      );
 
       expect(result).toBeNull();
     });
@@ -163,10 +165,7 @@ describe('UserRepository', () => {
       mockRepository.findOne.mockResolvedValue(mockUser);
       mockRepository.save.mockResolvedValue(bannedUser);
 
-      const result = await userRepository.banUser(
-        'user-id',
-        'Terms violation',
-      );
+      const result = await userRepository.banUser('user-id', 'Terms violation');
 
       expect(result.isBanned).toBe(true);
       expect(mockRepository.save).toHaveBeenCalledWith(

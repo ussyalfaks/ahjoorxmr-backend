@@ -5,7 +5,11 @@ import * as fsSync from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { Readable } from 'stream';
-import { StorageAdapter, UploadOptions, SignedUrlOptions } from './storage-adapter.interface';
+import {
+  StorageAdapter,
+  UploadOptions,
+  SignedUrlOptions,
+} from './storage-adapter.interface';
 
 @Injectable()
 export class LocalStorageAdapter implements StorageAdapter {
@@ -14,8 +18,14 @@ export class LocalStorageAdapter implements StorageAdapter {
   private readonly baseUrl: string;
 
   constructor(private configService: ConfigService) {
-    this.uploadDir = this.configService.get<string>('LOCAL_STORAGE_PATH', './uploads');
-    this.baseUrl = this.configService.get<string>('BASE_URL', 'http://localhost:3000');
+    this.uploadDir = this.configService.get<string>(
+      'LOCAL_STORAGE_PATH',
+      './uploads',
+    );
+    this.baseUrl = this.configService.get<string>(
+      'BASE_URL',
+      'http://localhost:3000',
+    );
     this.ensureUploadDirExists();
   }
 
@@ -37,7 +47,7 @@ export class LocalStorageAdapter implements StorageAdapter {
 
     // Write file
     await fs.writeFile(filePath, options.buffer);
-    
+
     const url = `${this.baseUrl}/api/v1/upload/files/${options.key}`;
     this.logger.log(`File uploaded locally: ${options.key}`);
     return url;
@@ -47,7 +57,7 @@ export class LocalStorageAdapter implements StorageAdapter {
     // For local storage, generate a time-limited token
     const expiry = Date.now() + options.expiresIn * 1000;
     const token = this.generateToken(options.key, expiry);
-    
+
     const signedUrl = `${this.baseUrl}/api/v1/upload/files/${options.key}?token=${token}&expires=${expiry}`;
     this.logger.log(`Generated signed URL for: ${options.key}`);
     return signedUrl;
@@ -55,7 +65,7 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   async getFileStream(key: string): Promise<Readable> {
     const filePath = path.join(this.uploadDir, key);
-    
+
     try {
       await fs.access(filePath);
       return fsSync.createReadStream(filePath);
@@ -66,7 +76,7 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   async delete(key: string): Promise<void> {
     const filePath = path.join(this.uploadDir, key);
-    
+
     try {
       await fs.unlink(filePath);
       this.logger.log(`File deleted locally: ${key}`);
@@ -79,7 +89,7 @@ export class LocalStorageAdapter implements StorageAdapter {
 
   async exists(key: string): Promise<boolean> {
     const filePath = path.join(this.uploadDir, key);
-    
+
     try {
       await fs.access(filePath);
       return true;
@@ -95,13 +105,16 @@ export class LocalStorageAdapter implements StorageAdapter {
     if (Date.now() > expires) {
       return false;
     }
-    
+
     const expectedToken = this.generateToken(key, expires);
     return token === expectedToken;
   }
 
   private generateToken(key: string, expiry: number): string {
-    const secret = this.configService.get<string>('JWT_SECRET', 'default-secret');
+    const secret = this.configService.get<string>(
+      'JWT_SECRET',
+      'default-secret',
+    );
     const data = `${key}:${expiry}:${secret}`;
     return crypto.createHash('sha256').update(data).digest('hex');
   }
