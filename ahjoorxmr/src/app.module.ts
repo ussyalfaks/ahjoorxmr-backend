@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { RedisModule } from './common/redis/redis.module';
+import { CacheInterceptor } from './common/interceptors/cache.interceptor';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -23,6 +26,7 @@ import { Contribution } from './contributions/entities/contribution.entity';
       entities: [Membership, Group, User, Contribution],
       synchronize: true, // Auto-create tables (disable in production)
       logging: false,
+    }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -46,6 +50,7 @@ import { Contribution } from './contributions/entities/contribution.entity';
       },
       inject: [ConfigService],
     }),
+    RedisModule,
     HealthModule,
     AuthModule,
     UsersModule,
@@ -53,6 +58,12 @@ import { Contribution } from './contributions/entities/contribution.entity';
     ContributionsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: CacheInterceptor,
+    },
+  ],
 })
 export class AppModule {}

@@ -5,10 +5,9 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import Redis from 'ioredis';
 import * as crypto from 'crypto';
 import * as StellarSdk from '@stellar/stellar-sdk';
+import { RedisService } from '../common/redis/redis.service';
 import { UsersService } from '../users/users.service';
 import { JwtPayload } from './jwt.strategy';
 
@@ -21,7 +20,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    @InjectRedis() private readonly redis: Redis,
+    private readonly redisService: RedisService,
   ) {}
 
   async generateChallenge(walletAddress: string): Promise<string> {
@@ -30,7 +29,7 @@ export class AuthService {
     const challenge = `Sign this message to authenticate with Cheese Platform.\n\nWallet: ${walletAddress}\nNonce: ${nonce}\nTimestamp: ${timestamp}`;
 
     const redisKey = `${this.CHALLENGE_PREFIX}${walletAddress}`;
-    await this.redis.set(redisKey, challenge, 'EX', this.CHALLENGE_TTL_SECONDS);
+    await this.redisService.setWithExpiry(redisKey, challenge, this.CHALLENGE_TTL_SECONDS);
 
     return challenge;
   }
@@ -42,7 +41,7 @@ export class AuthService {
   ): Promise<{ accessToken: string; refreshToken: string }> {
     // Validate challenge exists in Redis (replay protection)
     const redisKey = `${this.CHALLENGE_PREFIX}${walletAddress}`;
-    const storedChallenge = await this.redis.get(redisKey);
+    const storedChallenge = await this.redisService.get(redisKey);
 
     if (!storedChallenge) {
       throw new UnauthorizedException('Challenge expired or not found');
@@ -59,7 +58,7 @@ export class AuthService {
     }
 
     // Invalidate challenge after single use (replay protection)
-    await this.redis.del(redisKey);
+    await this.redisService.del(redisKey);
 
     // Upsert user
     const user = await this.usersService.upsertByWalletAddress(walletAddress);
