@@ -39,7 +39,10 @@ export class MembershipFactory {
   /**
    * Determines if a member has received payout based on current round and payout order.
    */
-  private hasReceivedPayout(currentRound: number, payoutOrder: number): boolean {
+  private hasReceivedPayout(
+    currentRound: number,
+    payoutOrder: number,
+  ): boolean {
     return currentRound >= payoutOrder;
   }
 

@@ -2,7 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { ContributionsService, RecordContributionDto } from './contributions.service';
+import {
+  ContributionsService,
+  RecordContributionDto,
+} from './contributions.service';
 import { Contribution } from '../entities/contribution.entity';
 
 describe('ContributionsService', () => {
@@ -40,14 +43,21 @@ describe('ContributionsService', () => {
 
   it('creates a new contribution when none exists', async () => {
     repo.findOne.mockResolvedValue(null);
-    const created = { id: 'new-id', ...baseDto, status: 'confirmed' } as unknown as Contribution;
+    const created = {
+      id: 'new-id',
+      ...baseDto,
+      status: 'confirmed',
+    } as unknown as Contribution;
     repo.create.mockReturnValue(created);
     repo.save.mockResolvedValue(created);
 
     const result = await service.recordContributionFromTransfer(baseDto);
 
     expect(repo.create).toHaveBeenCalledWith(
-      expect.objectContaining({ transactionHash: baseDto.transactionHash, status: 'confirmed' }),
+      expect.objectContaining({
+        transactionHash: baseDto.transactionHash,
+        status: 'confirmed',
+      }),
     );
     expect(repo.save).toHaveBeenCalledWith(created);
     expect(result).toBe(created);
@@ -82,13 +92,22 @@ describe('ContributionsService', () => {
       updatedAt: new Date(),
     };
     repo.findOne.mockResolvedValue(existing);
-    repo.save.mockResolvedValue({ ...existing, status: 'confirmed' } as Contribution);
+    repo.save.mockResolvedValue({
+      ...existing,
+      status: 'confirmed',
+    } as Contribution);
 
-    const dto: RecordContributionDto = { ...baseDto, contributionId: 'contrib-id' };
+    const dto: RecordContributionDto = {
+      ...baseDto,
+      contributionId: 'contrib-id',
+    };
     const result = await service.recordContributionFromTransfer(dto);
 
     expect(repo.save).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'confirmed', transactionHash: baseDto.transactionHash }),
+      expect.objectContaining({
+        status: 'confirmed',
+        transactionHash: baseDto.transactionHash,
+      }),
     );
     expect(result.status).toBe('confirmed');
   });

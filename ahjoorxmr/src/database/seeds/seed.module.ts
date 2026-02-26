@@ -11,9 +11,7 @@ import { MembershipFactory } from '../factories/membership.factory';
 import { ContributionFactory } from '../factories/contribution.factory';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([User, Group, Membership, Contribution]),
-  ],
+  imports: [TypeOrmModule.forFeature([User, Group, Membership, Contribution])],
   providers: [
     SeedService,
     UserFactory,

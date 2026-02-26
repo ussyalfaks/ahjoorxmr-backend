@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThan } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 import { AuditLogQueryDto } from './dto/audit-log-query.dto';
-import { PaginatedAuditLogResponseDto, AuditLogResponseDto } from './dto/audit-log-response.dto';
+import {
+  PaginatedAuditLogResponseDto,
+  AuditLogResponseDto,
+} from './dto/audit-log-response.dto';
 
 @Injectable()
 export class AuditService {
@@ -24,8 +27,18 @@ export class AuditService {
     }
   }
 
-  async findAll(query: AuditLogQueryDto): Promise<PaginatedAuditLogResponseDto> {
-    const { userId, action, resource, startDate, endDate, page = 1, limit = 20 } = query;
+  async findAll(
+    query: AuditLogQueryDto,
+  ): Promise<PaginatedAuditLogResponseDto> {
+    const {
+      userId,
+      action,
+      resource,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+    } = query;
 
     const whereConditions: any = {};
 
@@ -42,7 +55,10 @@ export class AuditService {
     }
 
     if (startDate && endDate) {
-      whereConditions.timestamp = Between(new Date(startDate), new Date(endDate));
+      whereConditions.timestamp = Between(
+        new Date(startDate),
+        new Date(endDate),
+      );
     } else if (startDate) {
       whereConditions.timestamp = Between(new Date(startDate), new Date());
     }
@@ -57,7 +73,7 @@ export class AuditService {
     });
 
     return {
-      data: logs.map(log => AuditLogResponseDto.fromEntity(log)),
+      data: logs.map((log) => AuditLogResponseDto.fromEntity(log)),
       total,
       page,
       limit,
@@ -75,8 +91,10 @@ export class AuditService {
       });
 
       const count = result.affected || 0;
-      this.logger.log(`Archived ${count} audit logs older than ${daysOld} days`);
-      
+      this.logger.log(
+        `Archived ${count} audit logs older than ${daysOld} days`,
+      );
+
       return count;
     } catch (error) {
       this.logger.error('Failed to archive old logs', error);

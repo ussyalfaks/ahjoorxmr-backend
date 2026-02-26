@@ -1,4 +1,11 @@
-import { Controller, Get, HttpCode, HttpStatus, Post, Version } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Version,
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { EventListenerService } from './event-listener.service';
 
@@ -15,7 +22,10 @@ export class EventListenerController {
   start(): { status: string; pollIntervalMs: number } {
     this.eventListenerService.startPolling();
     const status = this.eventListenerService.getPollingStatus();
-    return { status: status.running ? 'running' : 'stopped', pollIntervalMs: status.pollIntervalMs };
+    return {
+      status: status.running ? 'running' : 'stopped',
+      pollIntervalMs: status.pollIntervalMs,
+    };
   }
 
   @Post('stop')
@@ -25,7 +35,10 @@ export class EventListenerController {
   stop(): { status: string; pollIntervalMs: number } {
     this.eventListenerService.stopPolling();
     const status = this.eventListenerService.getPollingStatus();
-    return { status: status.running ? 'running' : 'stopped', pollIntervalMs: status.pollIntervalMs };
+    return {
+      status: status.running ? 'running' : 'stopped',
+      pollIntervalMs: status.pollIntervalMs,
+    };
   }
 
   @Get('status')
@@ -34,6 +47,9 @@ export class EventListenerController {
   @ApiResponse({ status: 200, description: 'Event polling worker status' })
   status(): { status: string; pollIntervalMs: number } {
     const status = this.eventListenerService.getPollingStatus();
-    return { status: status.running ? 'running' : 'stopped', pollIntervalMs: status.pollIntervalMs };
+    return {
+      status: status.running ? 'running' : 'stopped',
+      pollIntervalMs: status.pollIntervalMs,
+    };
   }
 }

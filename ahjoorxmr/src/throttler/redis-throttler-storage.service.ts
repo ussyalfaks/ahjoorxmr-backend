@@ -7,19 +7,22 @@ import Redis from 'ioredis';
 export class RedisThrottlerStorageService implements ThrottlerStorage {
   constructor(@InjectRedis() private readonly redis: Redis) {}
 
-  async increment(key: string, ttl: number): Promise<{
+  async increment(
+    key: string,
+    ttl: number,
+  ): Promise<{
     totalHits: number;
     timeToExpire: number;
   }> {
     const redisKey = `throttle:${key}`;
     const multi = this.redis.multi();
-    
+
     multi.incr(redisKey);
     multi.pexpire(redisKey, ttl);
     multi.pttl(redisKey);
-    
+
     const results = await multi.exec();
-    
+
     if (!results) {
       throw new Error('Redis transaction failed');
     }

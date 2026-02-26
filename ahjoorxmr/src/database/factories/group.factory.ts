@@ -26,12 +26,7 @@ export class GroupFactory {
     'Cultural Association Pool',
   ];
 
-  private readonly tokens = [
-    'USDC',
-    'XLM',
-    'USDT',
-    'EURC',
-  ];
+  private readonly tokens = ['USDC', 'XLM', 'USDT', 'EURC'];
 
   /**
    * Creates a new Group entity with random data.
@@ -40,7 +35,8 @@ export class GroupFactory {
     const group = new Group();
     group.name = this.getRandomGroupName();
     group.adminWallet = this.generateStellarAddress();
-    group.contractAddress = Math.random() < 0.7 ? this.generateStellarAddress() : null;
+    group.contractAddress =
+      Math.random() < 0.7 ? this.generateStellarAddress() : null;
     group.contributionAmount = this.getRandomContributionAmount();
     group.token = this.getRandomToken();
     group.roundDuration = this.getRandomRoundDuration();

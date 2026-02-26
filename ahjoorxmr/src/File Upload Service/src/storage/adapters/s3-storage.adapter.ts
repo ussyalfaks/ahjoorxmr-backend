@@ -1,9 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
-import { StorageAdapter, UploadOptions, SignedUrlOptions } from './storage-adapter.interface';
+import {
+  StorageAdapter,
+  UploadOptions,
+  SignedUrlOptions,
+} from './storage-adapter.interface';
 
 @Injectable()
 export class S3StorageAdapter implements StorageAdapter {
@@ -17,7 +27,9 @@ export class S3StorageAdapter implements StorageAdapter {
       region: this.configService.get<string>('AWS_REGION'),
       credentials: {
         accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
-        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
+        secretAccessKey: this.configService.get<string>(
+          'AWS_SECRET_ACCESS_KEY',
+        ),
       },
     });
     this.logger.log(`S3 Storage initialized with bucket: ${this.bucket}`);

@@ -26,7 +26,8 @@ export class ApiVersionDeprecationInterceptor implements NestInterceptor {
       this.reflector.get<boolean>('deprecated', context.getClass());
 
     // Check if version is deprecated (you can extend this logic)
-    const version = request.headers['x-api-version'] || this.getVersionFromUrl(request.url);
+    const version =
+      request.headers['x-api-version'] || this.getVersionFromUrl(request.url);
     const deprecatedVersions = ['0']; // Add versions to deprecate here
 
     return next.handle().pipe(

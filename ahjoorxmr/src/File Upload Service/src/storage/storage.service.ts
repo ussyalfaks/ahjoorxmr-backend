@@ -10,7 +10,10 @@ import { StorageAdapter } from './adapters/storage-adapter.interface';
 import { S3StorageAdapter } from './adapters/s3-storage.adapter';
 import { LocalStorageAdapter } from './adapters/local-storage.adapter';
 import { ImageCompressionService } from './services/image-compression.service';
-import { FileValidationService, ValidationOptions } from './services/file-validation.service';
+import {
+  FileValidationService,
+  ValidationOptions,
+} from './services/file-validation.service';
 
 export enum StorageType {
   S3 = 's3',
@@ -22,7 +25,11 @@ export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private storageAdapter: StorageAdapter;
   private readonly MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  private readonly ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  private readonly ALLOWED_IMAGE_TYPES = [
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+  ];
   private readonly ALLOWED_DOCUMENT_TYPES = [
     'application/pdf',
     'application/msword',
@@ -49,9 +56,8 @@ export class StorageService {
       StorageType.LOCAL,
     );
 
-    this.storageAdapter = storageType === StorageType.S3
-      ? this.s3Adapter
-      : this.localAdapter;
+    this.storageAdapter =
+      storageType === StorageType.S3 ? this.s3Adapter : this.localAdapter;
 
     this.logger.log(`Storage adapter initialized: ${storageType}`);
   }
@@ -63,7 +69,10 @@ export class StorageService {
   ): Promise<FileMetadata> {
     // Validate file
     const validationOptions = this.getValidationOptions(fileType);
-    const validationResult = this.fileValidation.validate(file, validationOptions);
+    const validationResult = this.fileValidation.validate(
+      file,
+      validationOptions,
+    );
 
     if (!validationResult.isValid) {
       throw new BadRequestException(validationResult.errors.join('; '));
@@ -95,8 +104,14 @@ export class StorageService {
 
     // Generate thumbnail if image
     let thumbnailUrl: string | null = null;
-    if (this.fileValidation.isImage(file.mimetype) && fileType === FileType.PROFILE_PICTURE) {
-      thumbnailUrl = await this.generateAndUploadThumbnail(processedBuffer, storageKey);
+    if (
+      this.fileValidation.isImage(file.mimetype) &&
+      fileType === FileType.PROFILE_PICTURE
+    ) {
+      thumbnailUrl = await this.generateAndUploadThumbnail(
+        processedBuffer,
+        storageKey,
+      );
     }
 
     // Save metadata to database
@@ -131,7 +146,10 @@ export class StorageService {
     };
   }
 
-  private async processImage(buffer: Buffer, fileType: FileType): Promise<Buffer> {
+  private async processImage(
+    buffer: Buffer,
+    fileType: FileType,
+  ): Promise<Buffer> {
     // Auto-orient based on EXIF
     const oriented = await this.imageCompression.autoOrient(buffer);
 
@@ -173,8 +191,13 @@ export class StorageService {
     return `${timestamp}-${hash}${ext}`;
   }
 
-  async getSignedUrl(fileId: string, expiresIn: number = 3600): Promise<string> {
-    const metadata = await this.fileMetadataRepo.findOne({ where: { id: fileId } });
+  async getSignedUrl(
+    fileId: string,
+    expiresIn: number = 3600,
+  ): Promise<string> {
+    const metadata = await this.fileMetadataRepo.findOne({
+      where: { id: fileId },
+    });
     if (!metadata) {
       throw new BadRequestException('File not found');
     }
@@ -186,7 +209,9 @@ export class StorageService {
   }
 
   async getFileMetadata(fileId: string): Promise<FileMetadata> {
-    const metadata = await this.fileMetadataRepo.findOne({ where: { id: fileId } });
+    const metadata = await this.fileMetadataRepo.findOne({
+      where: { id: fileId },
+    });
     if (!metadata) {
       throw new BadRequestException('File not found');
     }
@@ -194,7 +219,9 @@ export class StorageService {
   }
 
   async deleteFile(fileId: string): Promise<void> {
-    const metadata = await this.fileMetadataRepo.findOne({ where: { id: fileId } });
+    const metadata = await this.fileMetadataRepo.findOne({
+      where: { id: fileId },
+    });
     if (!metadata) {
       throw new BadRequestException('File not found');
     }

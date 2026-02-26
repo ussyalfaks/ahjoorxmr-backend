@@ -13,8 +13,8 @@ import { HealthModule } from './health/health.module';
       throttlers: [
         {
           name: 'default',
-          ttl: 60000,   // 1 minute in ms
-          limit: 60,    // default: 60 req/min
+          ttl: 60000, // 1 minute in ms
+          limit: 60, // default: 60 req/min
         },
       ],
       storage: new ThrottlerStorageRedisService(

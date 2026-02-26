@@ -23,7 +23,10 @@ export class ImageCompressionService {
   /**
    * Compress an image with specified options
    */
-  async compress(buffer: Buffer, options: CompressionOptions = {}): Promise<Buffer> {
+  async compress(
+    buffer: Buffer,
+    options: CompressionOptions = {},
+  ): Promise<Buffer> {
     const {
       quality = 80,
       maxWidth,

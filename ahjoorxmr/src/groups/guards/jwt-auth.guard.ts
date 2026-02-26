@@ -1,8 +1,8 @@
 import {
-    Injectable,
-    CanActivate,
-    ExecutionContext,
-    UnauthorizedException,
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
 } from '@nestjs/common';
 
 /**
@@ -18,36 +18,36 @@ import {
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
-    canActivate(context: ExecutionContext): boolean {
-        const request = context.switchToHttp().getRequest();
-        const authHeader = request.headers.authorization as string | undefined;
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    const authHeader = request.headers.authorization as string | undefined;
 
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            throw new UnauthorizedException(
-                'Missing or invalid authorization header',
-            );
-        }
-
-        const token = authHeader.substring(7);
-
-        if (!token) {
-            throw new UnauthorizedException('Missing JWT token');
-        }
-
-        // TODO: Validate real JWT and extract user data from payload.
-        // For now, accept a UUID as userId (testing) or any non-empty string as walletAddress.
-        const uuidRegex =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-        if (uuidRegex.test(token)) {
-            request.user = {
-                id: token,
-                userId: token,
-                walletAddress: token,
-            };
-            return true;
-        }
-
-        throw new UnauthorizedException('Invalid JWT token');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedException(
+        'Missing or invalid authorization header',
+      );
     }
+
+    const token = authHeader.substring(7);
+
+    if (!token) {
+      throw new UnauthorizedException('Missing JWT token');
+    }
+
+    // TODO: Validate real JWT and extract user data from payload.
+    // For now, accept a UUID as userId (testing) or any non-empty string as walletAddress.
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (uuidRegex.test(token)) {
+      request.user = {
+        id: token,
+        userId: token,
+        walletAddress: token,
+      };
+      return true;
+    }
+
+    throw new UnauthorizedException('Invalid JWT token');
+  }
 }

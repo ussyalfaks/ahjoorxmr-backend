@@ -1,7 +1,7 @@
-import { Processor, WorkerHost } from "@nestjs/bullmq";
-import { Job } from "bullmq";
+import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Job } from 'bullmq';
 
-@Processor("payments")
+@Processor('payments')
 export class PaymentsProcessor extends WorkerHost {
   async process(job: Job): Promise<any> {
     const { orderId, amount, currency } = job.data;
@@ -15,7 +15,7 @@ export class PaymentsProcessor extends WorkerHost {
 
     // Simulate occasional failures for testing
     if (Math.random() < 0.1) {
-      throw new Error("Payment gateway timeout");
+      throw new Error('Payment gateway timeout');
     }
 
     return { processed: true, orderId, amount };

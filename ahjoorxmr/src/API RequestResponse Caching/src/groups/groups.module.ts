@@ -1,7 +1,7 @@
-import { Module } from "@nestjs/common";
-import { GroupsController } from "./groups.controller";
-import { GroupsService } from "./groups.service";
-import { CacheModule } from "../cache/cache.module";
+import { Module } from '@nestjs/common';
+import { GroupsController } from './groups.controller';
+import { GroupsService } from './groups.service';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [CacheModule],

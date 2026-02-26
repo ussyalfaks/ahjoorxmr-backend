@@ -16,7 +16,9 @@ import { GroupSyncProcessor } from './processors/group-sync.processor';
  * Delays: attempt 0 → 1 s, attempt 1 → 5 s, attempt 2+ → 30 s.
  */
 function customBackoffStrategy(attemptsMade: number): number {
-  return BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1];
+  return (
+    BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1]
+  );
 }
 
 // Shared default job options applied at the queue level
@@ -41,7 +43,8 @@ const sharedQueueOptions = {
           host: configService.get<string>('REDIS_HOST', 'localhost'),
           port: configService.get<number>('REDIS_PORT', 6379),
           password: configService.get<string>('REDIS_PASSWORD'),
-          tls: configService.get<string>('REDIS_TLS') === 'true' ? {} : undefined,
+          tls:
+            configService.get<string>('REDIS_TLS') === 'true' ? {} : undefined,
           maxRetriesPerRequest: null, // required by BullMQ
         },
         // Register our custom backoff strategy globally
@@ -57,7 +60,10 @@ const sharedQueueOptions = {
       { name: QUEUE_NAMES.EMAIL, ...sharedQueueOptions },
       { name: QUEUE_NAMES.EVENT_SYNC, ...sharedQueueOptions },
       { name: QUEUE_NAMES.GROUP_SYNC, ...sharedQueueOptions },
-      { name: QUEUE_NAMES.DEAD_LETTER, defaultJobOptions: { removeOnComplete: false, removeOnFail: false } },
+      {
+        name: QUEUE_NAMES.DEAD_LETTER,
+        defaultJobOptions: { removeOnComplete: false, removeOnFail: false },
+      },
     ),
   ],
   controllers: [QueueAdminController],

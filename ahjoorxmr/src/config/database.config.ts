@@ -22,7 +22,7 @@ export default registerAs(
 
       // Entity auto-loading
       entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-      
+
       // Migrations configuration
       migrations: [__dirname + '/../../migrations/*{.ts,.js}'],
       migrationsRun: process.env.RUN_MIGRATIONS === 'true',
@@ -39,22 +39,27 @@ export default registerAs(
       extra: {
         // Maximum number of clients in the pool
         max: parseInt(process.env.DB_POOL_MAX || '20', 10),
-        
+
         // Minimum number of clients in the pool
         min: parseInt(process.env.DB_POOL_MIN || '2', 10),
-        
+
         // Maximum time (ms) a client can be idle before being released
         idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10),
-        
+
         // Maximum time (ms) to wait for connection from pool
-        connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '2000', 10),
-        
+        connectionTimeoutMillis: parseInt(
+          process.env.DB_CONNECTION_TIMEOUT || '2000',
+          10,
+        ),
+
         // Enable SSL for production
-        ssl: isProduction && process.env.DB_SSL !== 'false'
-          ? {
-              rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
-            }
-          : false,
+        ssl:
+          isProduction && process.env.DB_SSL !== 'false'
+            ? {
+                rejectUnauthorized:
+                  process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+              }
+            : false,
       },
 
       // Retry connection
@@ -65,17 +70,18 @@ export default registerAs(
       autoLoadEntities: true,
 
       // Cache
-      cache: process.env.DB_CACHE_ENABLED === 'true'
-        ? {
-            type: 'redis',
-            options: {
-              host: process.env.REDIS_HOST || 'localhost',
-              port: parseInt(process.env.REDIS_PORT || '6379', 10),
-              password: process.env.REDIS_PASSWORD,
-            },
-            duration: parseInt(process.env.DB_CACHE_DURATION || '60000', 10), // 60 seconds
-          }
-        : false,
+      cache:
+        process.env.DB_CACHE_ENABLED === 'true'
+          ? {
+              type: 'redis',
+              options: {
+                host: process.env.REDIS_HOST || 'localhost',
+                port: parseInt(process.env.REDIS_PORT || '6379', 10),
+                password: process.env.REDIS_PASSWORD,
+              },
+              duration: parseInt(process.env.DB_CACHE_DURATION || '60000', 10), // 60 seconds
+            }
+          : false,
     };
   },
 );

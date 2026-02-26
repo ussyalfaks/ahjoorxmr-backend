@@ -1,5 +1,5 @@
-import { Injectable } from "@nestjs/common";
-import { CacheService } from "../cache/cache.service";
+import { Injectable } from '@nestjs/common';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class UsersService {
@@ -11,7 +11,7 @@ export class UsersService {
       id,
       name: `User ${id}`,
       email: `user${id}@example.com`,
-      bio: "Sample bio",
+      bio: 'Sample bio',
     };
   }
 

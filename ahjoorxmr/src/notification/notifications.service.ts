@@ -51,12 +51,14 @@ export class NotificationsService {
     const saved = await this.notificationRepo.save(notification);
 
     if (dto.sendEmail && dto.emailTo) {
-      setImmediate(() => this.sendEmail(dto).catch((err) => {
-        this.logger.error(
-          `Failed to send email for notification ${saved.id}: ${err.message}`,
-          err.stack,
-        );
-      }));
+      setImmediate(() =>
+        this.sendEmail(dto).catch((err) => {
+          this.logger.error(
+            `Failed to send email for notification ${saved.id}: ${err.message}`,
+            err.stack,
+          );
+        }),
+      );
     }
 
     return saved;

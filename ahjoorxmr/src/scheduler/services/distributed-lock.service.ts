@@ -23,15 +23,15 @@ export class DistributedLockService {
     try {
       // Use SET with NX (only set if not exists) and EX (expiration)
       await this.redisService.set(lockKey, lockValue, ttlSeconds);
-      
+
       // Check if we successfully set the key
       const exists = await this.redisService.exists(lockKey);
-      
+
       if (exists) {
         this.logger.debug(`Lock acquired: ${lockName}`);
         return true;
       }
-      
+
       return false;
     } catch (error) {
       this.logger.error(`Failed to acquire lock ${lockName}:`, error);
@@ -44,7 +44,7 @@ export class DistributedLockService {
    */
   async releaseLock(lockName: string): Promise<void> {
     const lockKey = `${this.lockPrefix}${lockName}`;
-    
+
     try {
       await this.redisService.del(lockKey);
       this.logger.debug(`Lock released: ${lockName}`);
@@ -63,7 +63,7 @@ export class DistributedLockService {
     ttlSeconds: number = this.defaultTTL,
   ): Promise<T | null> {
     const acquired = await this.acquireLock(lockName, ttlSeconds);
-    
+
     if (!acquired) {
       this.logger.warn(`Could not acquire lock: ${lockName}. Task skipped.`);
       return null;

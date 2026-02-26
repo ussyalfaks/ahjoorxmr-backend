@@ -8,7 +8,10 @@ import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { Reflector } from '@nestjs/core';
 import { AuditService } from '../audit.service';
-import { AUDIT_LOG_KEY, AuditLogOptions } from '../decorators/audit-log.decorator';
+import {
+  AUDIT_LOG_KEY,
+  AuditLogOptions,
+} from '../decorators/audit-log.decorator';
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
@@ -54,16 +57,16 @@ export class AuditLogInterceptor implements NestInterceptor {
 
   private sanitizePayload(payload: any): any {
     if (!payload) return null;
-    
+
     const sanitized = { ...payload };
     const sensitiveFields = ['password', 'token', 'secret', 'apiKey'];
-    
+
     for (const field of sensitiveFields) {
       if (sanitized[field]) {
         sanitized[field] = '[REDACTED]';
       }
     }
-    
+
     return sanitized;
   }
 }
