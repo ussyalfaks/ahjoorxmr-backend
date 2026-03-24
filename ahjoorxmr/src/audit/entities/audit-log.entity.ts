@@ -24,7 +24,7 @@ export class AuditLog {
   @Column()
   resource: string;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
 
   @CreateDateColumn()
@@ -36,6 +36,6 @@ export class AuditLog {
   @Column({ type: 'text', nullable: true })
   userAgent: string;
 
-  @Column({ type: 'json', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   requestPayload: Record<string, any>;
 }
