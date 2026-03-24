@@ -414,6 +414,42 @@ export class GroupsController {
   }
 
   /**
+   * Retrieves the on-chain contract state for a specific group.
+   * Returns the current state from the Stellar smart contract.
+   *
+   * @param id - The UUID of the group
+   * @returns The on-chain contract state
+   * @throws NotFoundException if the group doesn't exist
+   * @throws BadRequestException if the group has no contract address
+   */
+  @Get(':id/contract-state')
+  @ApiOperation({
+    summary: 'Get group contract state',
+    description:
+      'Retrieves the on-chain contract state for a specific group from the Stellar blockchain',
+  })
+  @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved contract state',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Group has no contract address',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group not found',
+    type: ErrorResponseDto,
+  })
+  async getContractState(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<unknown> {
+    return this.groupsService.getContractState(id);
+  }
+
+  /**
    * Maps a Group entity to a GroupResponseDto.
    * @param group - The group entity
    * @param includeMembers - Whether to include the memberships array

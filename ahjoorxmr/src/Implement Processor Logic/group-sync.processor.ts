@@ -62,10 +62,8 @@ export class GroupSyncProcessor extends WorkerHost {
     }
 
     // Fetch live on-chain state
-    const onChainState = await this.stellarService.getGroupState(
-      contractAddress,
-      chainId,
-    );
+    const onChainState =
+      await this.stellarService.getGroupState(contractAddress);
 
     group.status = onChainState.status;
     group.currentRound = onChainState.currentRound;

@@ -70,6 +70,45 @@ describe('StellarService', () => {
       expect(result).toEqual({ id: 'group-1' });
     });
 
+    it('throws BadRequestException when contractAddress is null', async () => {
+      await expect(service.getGroupState(null as any)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.getGroupState(null as any)).rejects.toThrow(
+        'Contract address is required for getGroupState',
+      );
+    });
+
+    it('throws BadRequestException when contractAddress is empty string', async () => {
+      await expect(service.getGroupState('')).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.getGroupState('')).rejects.toThrow(
+        'Contract address is required for getGroupState',
+      );
+    });
+
+    it('works with different contract addresses', async () => {
+      const contractAddress1 =
+        'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
+      const contractAddress2 =
+        'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4';
+
+      mockServer.simulateTransaction.mockResolvedValueOnce({
+        result: { retval: { id: 'group-1' } },
+      });
+      mockServer.simulateTransaction.mockResolvedValueOnce({
+        result: { retval: { id: 'group-2' } },
+      });
+
+      const result1 = await service.getGroupState(contractAddress1);
+      const result2 = await service.getGroupState(contractAddress2);
+
+      expect(result1).toEqual({ id: 'group-1' });
+      expect(result2).toEqual({ id: 'group-2' });
+      expect(mockServer.simulateTransaction).toHaveBeenCalledTimes(2);
+    });
+
     it('maps RPC network failures to BadGatewayException', async () => {
       mockServer.simulateTransaction.mockRejectedValue(
         new Error('Network timeout while calling RPC'),
@@ -94,6 +133,109 @@ describe('StellarService', () => {
       );
 
       expect(result).toEqual({ name: 'test-group', size: 5 });
+    });
+
+    it('throws BadRequestException when contractAddress is null', async () => {
+      await expect(service.getGroupInfo(null as any)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.getGroupInfo(null as any)).rejects.toThrow(
+        'Contract address is required for getGroupInfo',
+      );
+    });
+
+    it('throws BadRequestException when contractAddress is empty string', async () => {
+      await expect(service.getGroupInfo('')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('works with different contract addresses', async () => {
+      const contractAddress1 =
+        'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
+      const contractAddress2 =
+        'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4';
+
+      mockServer.simulateTransaction.mockResolvedValueOnce({
+        result: { retval: { name: 'group-1', size: 5 } },
+      });
+      mockServer.simulateTransaction.mockResolvedValueOnce({
+        result: { retval: { name: 'group-2', size: 10 } },
+      });
+
+      const result1 = await service.getGroupInfo(contractAddress1);
+      const result2 = await service.getGroupInfo(contractAddress2);
+
+      expect(result1).toEqual({ name: 'group-1', size: 5 });
+      expect(result2).toEqual({ name: 'group-2', size: 10 });
+    });
+  });
+
+  describe('getContractBalance()', () => {
+    it('calls get_balance and returns balance as string', async () => {
+      mockServer.simulateTransaction.mockResolvedValue({
+        result: { retval: 1000000 },
+      });
+
+      const result = await service.getContractBalance(
+        'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+      );
+
+      expect(result).toBe('1000000');
+      expect(mockServer.simulateTransaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws BadRequestException when contractAddress is null', async () => {
+      await expect(service.getContractBalance(null as any)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.getContractBalance(null as any)).rejects.toThrow(
+        'Contract address is required for getContractBalance',
+      );
+    });
+
+    it('throws BadRequestException when contractAddress is empty string', async () => {
+      await expect(service.getContractBalance('')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('returns "0" when balance is null or undefined', async () => {
+      mockServer.simulateTransaction.mockResolvedValueOnce({
+        result: { retval: null },
+      });
+      const result1 = await service.getContractBalance(
+        'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+      );
+      expect(result1).toBe('0');
+
+      mockServer.simulateTransaction.mockResolvedValueOnce({
+        result: { retval: undefined },
+      });
+      const result2 = await service.getContractBalance(
+        'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+      );
+      expect(result2).toBe('0');
+    });
+
+    it('works with different contract addresses', async () => {
+      const contractAddress1 =
+        'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
+      const contractAddress2 =
+        'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4';
+
+      mockServer.simulateTransaction.mockResolvedValueOnce({
+        result: { retval: 5000000 },
+      });
+      mockServer.simulateTransaction.mockResolvedValueOnce({
+        result: { retval: 10000000 },
+      });
+
+      const result1 = await service.getContractBalance(contractAddress1);
+      const result2 = await service.getContractBalance(contractAddress2);
+
+      expect(result1).toBe('5000000');
+      expect(result2).toBe('10000000');
     });
   });
 

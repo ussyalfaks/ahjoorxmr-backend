@@ -62,11 +62,34 @@ export class StellarService {
   }
 
   async getGroupState(contractAddress: string): Promise<unknown> {
+    if (!contractAddress) {
+      throw new BadRequestException(
+        'Contract address is required for getGroupState',
+      );
+    }
     return this.invokeContractMethod(contractAddress, 'get_state');
   }
 
   async getGroupInfo(contractAddress: string): Promise<unknown> {
+    if (!contractAddress) {
+      throw new BadRequestException(
+        'Contract address is required for getGroupInfo',
+      );
+    }
     return this.invokeContractMethod(contractAddress, 'get_group_info');
+  }
+
+  async getContractBalance(contractAddress: string): Promise<string> {
+    if (!contractAddress) {
+      throw new BadRequestException(
+        'Contract address is required for getContractBalance',
+      );
+    }
+    const result = await this.invokeContractMethod(
+      contractAddress,
+      'get_balance',
+    );
+    return String(result ?? '0');
   }
 
   async verifyContribution(txHash: string): Promise<boolean> {
@@ -158,8 +181,11 @@ export class StellarService {
     contractAddress: string,
     method: string,
   ): Promise<unknown> {
-    const resolvedContractAddress =
-      this.resolveContractAddress(contractAddress);
+    if (!contractAddress) {
+      throw new BadRequestException(
+        'Contract address is required for contract method invocation',
+      );
+    }
     this.validateConfiguration();
 
     try {
@@ -169,13 +195,11 @@ export class StellarService {
       );
       let operation: unknown;
       try {
-        const contract = new (StellarSdk as any).Contract(
-          resolvedContractAddress,
-        );
+        const contract = new (StellarSdk as any).Contract(contractAddress);
         operation = contract.call(method);
       } catch {
         operation = {
-          contractAddress: resolvedContractAddress,
+          contractAddress: contractAddress,
           method,
         };
       }
@@ -191,7 +215,7 @@ export class StellarService {
         tx = txBuilder.addOperation(operation).setTimeout(30).build();
       } catch {
         tx = {
-          contractAddress: resolvedContractAddress,
+          contractAddress: contractAddress,
           method,
           networkPassphrase: this.networkPassphrase,
         };

@@ -504,4 +504,52 @@ export class GroupsService {
 
     return savedGroup;
   }
+
+  /**
+   * Retrieves the on-chain contract state for a specific group.
+   * Calls the Stellar service to fetch the current state from the smart contract.
+   *
+   * @param groupId - The UUID of the group
+   * @returns The on-chain contract state
+   * @throws NotFoundException if the group doesn't exist
+   * @throws BadRequestException if the group has no contract address
+   */
+  async getContractState(groupId: string): Promise<unknown> {
+    this.logger.log(
+      `Fetching contract state for group ${groupId}`,
+      'GroupsService',
+    );
+
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    if (!group.contractAddress) {
+      throw new BadRequestException(
+        'Group has no contract address. Contract may not be deployed yet.',
+      );
+    }
+
+    try {
+      const state = await this.stellarService.getGroupState(
+        group.contractAddress,
+      );
+      this.logger.log(
+        `Successfully fetched contract state for group ${groupId}`,
+        'GroupsService',
+      );
+      return state;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch contract state for group ${groupId}: ${error.message}`,
+        error.stack,
+        'GroupsService',
+      );
+      throw error;
+    }
+  }
 }

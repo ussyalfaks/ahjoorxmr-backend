@@ -893,4 +893,141 @@ describe('GroupsService', () => {
       );
     });
   });
+
+  // -------------------------------------------------------------------------
+  // getContractState
+  // -------------------------------------------------------------------------
+
+  describe('getContractState', () => {
+    const groupId = BASE_GROUP_ID;
+
+    it('should fetch contract state for a group with contractAddress', async () => {
+      const mockGroup = createMockGroup({
+        contractAddress:
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+      });
+      const mockState = {
+        status: 'ACTIVE',
+        currentRound: 3,
+        totalMembers: 5,
+      };
+
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+      (stellarService.getGroupState as jest.Mock).mockResolvedValue(mockState);
+
+      const result = await service.getContractState(groupId);
+
+      expect(groupRepository.findOne).toHaveBeenCalledWith({
+        where: { id: groupId },
+      });
+      expect(stellarService.getGroupState).toHaveBeenCalledWith(
+        'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+      );
+      expect(result).toEqual(mockState);
+      expect(logger.log).toHaveBeenCalledWith(
+        `Fetching contract state for group ${groupId}`,
+        'GroupsService',
+      );
+      expect(logger.log).toHaveBeenCalledWith(
+        `Successfully fetched contract state for group ${groupId}`,
+        'GroupsService',
+      );
+    });
+
+    it('should throw NotFoundException when group does not exist', async () => {
+      groupRepository.findOne!.mockResolvedValue(null);
+
+      await expect(service.getContractState('non-existent-id')).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.getContractState('non-existent-id')).rejects.toThrow(
+        'Group not found',
+      );
+      expect(stellarService.getGroupState).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException when group has no contractAddress', async () => {
+      const mockGroup = createMockGroup({
+        contractAddress: null,
+      });
+
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+      await expect(service.getContractState(groupId)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.getContractState(groupId)).rejects.toThrow(
+        'Group has no contract address',
+      );
+      expect(stellarService.getGroupState).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException when contractAddress is empty string', async () => {
+      const mockGroup = createMockGroup({
+        contractAddress: '',
+      });
+
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+      await expect(service.getContractState(groupId)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(stellarService.getGroupState).not.toHaveBeenCalled();
+    });
+
+    it('should handle stellar service errors and log them', async () => {
+      const mockGroup = createMockGroup({
+        contractAddress:
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+      });
+      const stellarError = new Error('RPC connection failed');
+
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+      (stellarService.getGroupState as jest.Mock).mockRejectedValue(
+        stellarError,
+      );
+
+      await expect(service.getContractState(groupId)).rejects.toThrow(
+        'RPC connection failed',
+      );
+      expect(logger.error).toHaveBeenCalledWith(
+        `Failed to fetch contract state for group ${groupId}: RPC connection failed`,
+        expect.any(String),
+        'GroupsService',
+      );
+    });
+
+    it('should work with different contract addresses', async () => {
+      const group1 = createMockGroup({
+        id: 'group-1',
+        contractAddress:
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+      });
+      const group2 = createMockGroup({
+        id: 'group-2',
+        contractAddress:
+          'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4',
+      });
+      const state1 = { status: 'ACTIVE', currentRound: 1 };
+      const state2 = { status: 'ACTIVE', currentRound: 5 };
+
+      groupRepository.findOne!.mockResolvedValueOnce(group1);
+      groupRepository.findOne!.mockResolvedValueOnce(group2);
+      (stellarService.getGroupState as jest.Mock)
+        .mockResolvedValueOnce(state1)
+        .mockResolvedValueOnce(state2);
+
+      const result1 = await service.getContractState('group-1');
+      const result2 = await service.getContractState('group-2');
+
+      expect(result1).toEqual(state1);
+      expect(result2).toEqual(state2);
+      expect(stellarService.getGroupState).toHaveBeenCalledWith(
+        'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+      );
+      expect(stellarService.getGroupState).toHaveBeenCalledWith(
+        'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4',
+      );
+    });
+  });
 });
