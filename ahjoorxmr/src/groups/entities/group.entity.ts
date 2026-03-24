@@ -28,8 +28,8 @@ export class Group extends BaseEntity {
   roundDuration: number;
 
   @Column({
-    type: 'varchar',
-    length: 20,
+    type: 'enum',
+    enum: GroupStatus,
     default: GroupStatus.PENDING,
   })
   status: GroupStatus;

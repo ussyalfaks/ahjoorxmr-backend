@@ -10,7 +10,7 @@ import { InternalServerErrorResponseDto } from '../common/dto/error-response.dto
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly healthService: HealthService) {}
+  constructor(private readonly healthService: HealthService) { }
 
   @Get()
   @ApiOperation({
@@ -49,24 +49,6 @@ export class HealthController {
     type: InternalServerErrorResponseDto,
   })
   async getReadiness(): Promise<ReadinessResponseDto> {
-    return this.healthService.getReadinessStatus();
-  }
-
-  @Get('database')
-  @ApiOperation({
-    summary: 'Get database health status',
-    description:
-      'Returns detailed database health information including connection pool stats and database size',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Database health status retrieved successfully',
-  })
-  async getDatabaseHealth() {
-    return this.healthService.getDatabaseHealth();
-  }
-}
-  getReadiness(): ReadinessResponseDto {
     return this.healthService.getReadinessStatus();
   }
 

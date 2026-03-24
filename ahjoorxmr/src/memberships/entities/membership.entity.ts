@@ -45,11 +45,10 @@ export class Membership extends BaseEntity {
   @Column('varchar', { length: 255, nullable: true })
   transactionHash: string | null;
 
-  // Note: Using varchar instead of enum for SQLite compatibility
-  // For PostgreSQL, you can use: type: 'enum', enum: MembershipStatus
+  // Using PostgreSQL ENUM type for better type safety and performance
   @Column({
-    type: 'varchar',
-    length: 20,
+    type: 'enum',
+    enum: MembershipStatus,
     default: MembershipStatus.ACTIVE,
   })
   status: MembershipStatus;

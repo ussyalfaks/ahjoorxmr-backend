@@ -41,7 +41,7 @@ export class User extends BaseEntity {
   @Column({ type: 'boolean', default: false })
   twoFactorEnabled: boolean;
 
-  @Column({ type: 'simple-array', nullable: true })
+  @Column({ type: 'text', array: true, nullable: true })
   backupCodes?: string[] | null;
 
   // Profile Information
