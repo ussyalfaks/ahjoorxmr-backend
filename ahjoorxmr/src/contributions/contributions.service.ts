@@ -27,7 +27,7 @@ export class ContributionsService {
     private readonly logger: WinstonLogger,
     private readonly stellarService: StellarService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   /**
    * Validates that a group exists and returns it.
@@ -82,11 +82,10 @@ export class ContributionsService {
       if (shouldVerify) {
         // Use group's contract address if available, fall back to global address
         if (group.contractAddress) {
-          const isValid =
-            await this.stellarService.verifyContributionForGroup(
-              transactionHash,
-              group.contractAddress,
-            );
+          const isValid = await this.stellarService.verifyContributionForGroup(
+            transactionHash,
+            group.contractAddress,
+          );
           if (!isValid) {
             this.logger.warn(
               `Contribution verification failed for transaction hash ${transactionHash} against group contract ${group.contractAddress}`,
@@ -106,11 +105,10 @@ export class ContributionsService {
             `Group ${groupId} has no contractAddress, falling back to global CONTRACT_ADDRESS`,
             'ContributionsService',
           );
-          const isValid =
-            await this.stellarService.verifyContributionForGroup(
-              transactionHash,
-              null,
-            );
+          const isValid = await this.stellarService.verifyContributionForGroup(
+            transactionHash,
+            null,
+          );
           if (!isValid) {
             this.logger.warn(
               `Contribution verification failed for transaction hash ${transactionHash}`,

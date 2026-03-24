@@ -10,7 +10,7 @@ import { InternalServerErrorResponseDto } from '../common/dto/error-response.dto
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly healthService: HealthService) { }
+  constructor(private readonly healthService: HealthService) {}
 
   @Get()
   @ApiOperation({

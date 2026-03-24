@@ -16,6 +16,7 @@ import {
   DefaultValuePipe,
   ParseBoolPipe,
   Version,
+  SetMetadata,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,7 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
+  ApiDeprecatedResponse,
 } from '@nestjs/swagger';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -44,12 +46,18 @@ import { ErrorResponseDto } from '../common/dto/error-response.dto';
  * Controller for managing ROSCA groups.
  * Provides REST API endpoints for creating, listing, fetching, and updating groups.
  *
+ * DEPRECATED: This is API v1. Use /api/v2/groups for the new version.
+ * Breaking changes in v2:
+ * - GET /api/v2/groups/:id no longer includes members
+ * - Use GET /api/v2/groups/:id/members for member data
+ *
  * IMPORTANT: The GET /my route is declared BEFORE GET /:id to prevent
  * NestJS from treating "my" as a UUID parameter.
  */
 @ApiTags('Groups')
 @Controller('groups')
 @Version('1')
+@SetMetadata('deprecated', true)
 export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}
 
@@ -143,7 +151,11 @@ export class GroupsController {
     @Query('includeArchived', new DefaultValuePipe(false), ParseBoolPipe)
     includeArchived: boolean,
   ): Promise<PaginatedGroupsResponseDto> {
-    const result = await this.groupsService.findAll(page, limit, includeArchived);
+    const result = await this.groupsService.findAll(
+      page,
+      limit,
+      includeArchived,
+    );
     return {
       data: result.data.map((g) => this.toGroupResponse(g)),
       total: result.total,
@@ -291,13 +303,26 @@ export class GroupsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Archive (soft-delete) a group',
-    description: 'Soft-deletes a group by setting deletedAt. Only the group admin can delete.',
+    description:
+      'Soft-deletes a group by setting deletedAt. Only the group admin can delete.',
   })
   @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
   @ApiResponse({ status: 204, description: 'Group archived successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized', type: ErrorResponseDto })
-  @ApiResponse({ status: 403, description: 'Forbidden - only group admin can delete', type: ErrorResponseDto })
-  @ApiResponse({ status: 404, description: 'Group not found', type: ErrorResponseDto })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - only group admin can delete',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group not found',
+    type: ErrorResponseDto,
+  })
   @AuditLog({ action: 'DELETE', resource: 'GROUP' })
   async remove(
     @Request() req: { user: { id: string; walletAddress: string } },

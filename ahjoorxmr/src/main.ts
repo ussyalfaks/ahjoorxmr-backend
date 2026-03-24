@@ -60,13 +60,16 @@ async function bootstrap() {
     process.env.SWAGGER_ENABLED === 'true';
 
   if (isSwaggerEnabled) {
-    // V1 API Documentation
+    // V1 API Documentation (Deprecated)
     const configV1 = new DocumentBuilder()
-      .setTitle('Ahjoor Backend API v1')
+      .setTitle('Ahjoor Backend API v1 (Deprecated)')
       .setDescription(
-        'Version 1 of the Ahjoor Backend API. ' +
-          'This API provides endpoints for user authentication, ROSCA group management, ' +
-          'membership tracking, contribution processing, and more.',
+        'Version 1 of the Ahjoor Backend API (DEPRECATED). ' +
+        'This API provides endpoints for user authentication, ROSCA group management, ' +
+        'membership tracking, contribution processing, and more. ' +
+        'Please migrate to v2 for new integrations. ' +
+        'Breaking changes in v2: GET /api/v2/groups/:id no longer includes members; ' +
+        'use GET /api/v2/groups/:id/members instead.',
       )
       .setVersion('1.0.0')
       .setContact('Ahjoor Team', 'https://ahjoor.com', 'support@ahjoor.com')
@@ -78,7 +81,7 @@ async function bootstrap() {
         'User authentication and authorization endpoints',
       )
       .addTag('Users', 'User management endpoints')
-      .addTag('Groups', 'ROSCA group management endpoints')
+      .addTag('Groups', 'ROSCA group management endpoints (DEPRECATED)')
       .addTag('Memberships', 'Group membership management endpoints')
       .addTag('Contributions', 'Contribution tracking endpoints')
       .addTag('Audit', 'Audit log and monitoring endpoints')
@@ -111,11 +114,67 @@ async function bootstrap() {
         showRequestDuration: true,
         tryItOutEnabled: true,
       },
-      customSiteTitle: 'Ahjoor API Documentation',
+      customSiteTitle: 'Ahjoor API Documentation - v1 (Deprecated)',
     });
 
-    // Main API docs redirect to v1
-    SwaggerModule.setup('api/docs', app, documentV1, {
+    // V2 API Documentation (Current)
+    const configV2 = new DocumentBuilder()
+      .setTitle('Ahjoor Backend API v2')
+      .setDescription(
+        'Version 2 of the Ahjoor Backend API (Current). ' +
+        'This API provides endpoints for user authentication, ROSCA group management, ' +
+        'membership tracking, contribution processing, and more. ' +
+        'Breaking changes from v1: GET /api/v2/groups/:id no longer includes members; ' +
+        'use GET /api/v2/groups/:id/members for member data.',
+      )
+      .setVersion('2.0.0')
+      .setContact('Ahjoor Team', 'https://ahjoor.com', 'support@ahjoor.com')
+      .setLicense('UNLICENSED', '')
+      .addServer('http://localhost:3000', 'Local Development Server')
+      .addServer('https://api.ahjoor.com', 'Production Server')
+      .addTag(
+        'Authentication',
+        'User authentication and authorization endpoints',
+      )
+      .addTag('Users', 'User management endpoints')
+      .addTag('Groups V2', 'ROSCA group management endpoints (v2)')
+      .addTag('Memberships', 'Group membership management endpoints')
+      .addTag('Contributions', 'Contribution tracking endpoints')
+      .addTag('Audit', 'Audit log and monitoring endpoints')
+      .addTag('Health', 'Health check and status endpoints')
+      .addTag('Rate Limiting', 'Rate limiting configuration and management')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'JWT',
+          description: 'Enter JWT token',
+          in: 'header',
+        },
+        'JWT-auth',
+      )
+      .build();
+
+    const documentV2 = SwaggerModule.createDocument(app, configV2, {
+      include: [], // Include all modules for now
+      operationIdFactory: (controllerKey: string, methodKey: string) =>
+        `${controllerKey}_${methodKey}`,
+    });
+
+    SwaggerModule.setup('api/docs/v2', app, documentV2, {
+      swaggerOptions: {
+        persistAuthorization: true,
+        docExpansion: 'list',
+        filter: true,
+        showRequestDuration: true,
+        tryItOutEnabled: true,
+      },
+      customSiteTitle: 'Ahjoor API Documentation - v2',
+    });
+
+    // Main API docs redirect to v2 (current version)
+    SwaggerModule.setup('api/docs', app, documentV2, {
       swaggerOptions: {
         persistAuthorization: true,
         docExpansion: 'list',
@@ -128,8 +187,9 @@ async function bootstrap() {
 
     console.log(
       `Swagger documentation available at:\n` +
-        `  - v1: http://localhost:${process.env.PORT ?? 3000}/api/docs/v1\n` +
-        `  - default: http://localhost:${process.env.PORT ?? 3000}/api/docs`,
+      `  - v1 (deprecated): http://localhost:${process.env.PORT ?? 3000}/api/docs/v1\n` +
+      `  - v2 (current): http://localhost:${process.env.PORT ?? 3000}/api/docs/v2\n` +
+      `  - default: http://localhost:${process.env.PORT ?? 3000}/api/docs`,
     );
   }
 

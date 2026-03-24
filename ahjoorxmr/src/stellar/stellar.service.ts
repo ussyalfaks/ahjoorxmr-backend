@@ -54,7 +54,9 @@ export class StellarService {
     if (!group || !group.id) {
       throw new BadRequestException('Invalid group for contract deployment');
     }
-    const normalized = String(group.id).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const normalized = String(group.id)
+      .replace(/[^A-Za-z0-9]/g, '')
+      .toUpperCase();
     const addr = `C${normalized.slice(0, 55)}`;
     return Promise.resolve(addr);
   }
@@ -254,15 +256,15 @@ export class StellarService {
 
     const directMethod = String(
       transaction.functionName ??
-      transaction.function_name ??
-      transaction.method ??
-      '',
+        transaction.function_name ??
+        transaction.method ??
+        '',
     ).toLowerCase();
     const directContract = String(
       transaction.contractAddress ??
-      transaction.contract_address ??
-      transaction.contractId ??
-      '',
+        transaction.contract_address ??
+        transaction.contractId ??
+        '',
     );
 
     if (
@@ -336,15 +338,15 @@ export class StellarService {
 
     const directMethod = String(
       transaction.functionName ??
-      transaction.function_name ??
-      transaction.method ??
-      '',
+        transaction.function_name ??
+        transaction.method ??
+        '',
     ).toLowerCase();
     const directContract = String(
       transaction.contractAddress ??
-      transaction.contract_address ??
-      transaction.contractId ??
-      '',
+        transaction.contract_address ??
+        transaction.contractId ??
+        '',
     );
 
     if (

@@ -156,7 +156,8 @@ describe('ContributionsService', () => {
     it('should use group contractAddress when available', async () => {
       const groupWithContract = {
         id: 'group-1',
-        contractAddress: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+        contractAddress:
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
       };
       configService.get!.mockReturnValue(true);
       groupRepository.findOne!.mockResolvedValue(groupWithContract);
@@ -204,7 +205,8 @@ describe('ContributionsService', () => {
     it('should throw BadRequestException when verification fails against group contract', async () => {
       const groupWithContract = {
         id: 'group-1',
-        contractAddress: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+        contractAddress:
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
       };
       configService.get!.mockReturnValue(true);
       groupRepository.findOne!.mockResolvedValue(groupWithContract);

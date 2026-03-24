@@ -298,7 +298,9 @@ export class GroupsService {
         `Admin wallet mismatch: ${adminWallet} is not the admin of group ${id}`,
         'GroupsService',
       );
-      throw new ForbiddenException('Only the group admin can delete this group');
+      throw new ForbiddenException(
+        'Only the group admin can delete this group',
+      );
     }
 
     await this.groupRepository.softDelete(id);

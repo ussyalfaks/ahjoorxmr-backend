@@ -238,6 +238,5 @@ export class RedisService implements OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     await this.client.quit();
-
   }
 }

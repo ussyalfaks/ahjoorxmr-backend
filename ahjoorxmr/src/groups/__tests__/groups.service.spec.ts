@@ -542,8 +542,8 @@ describe('GroupsService', () => {
         currentRound: 1,
       } as Group;
       groupRepository.findOne!.mockResolvedValue(mockGroup);
-      groupRepository.save!
-        .mockResolvedValueOnce(activatedGroup)
+      groupRepository
+        .save!.mockResolvedValueOnce(activatedGroup)
         .mockResolvedValueOnce({ ...mockGroup } as Group);
       (stellarService.deployRoscaContract as jest.Mock).mockRejectedValue(
         new Error('deploy failed'),

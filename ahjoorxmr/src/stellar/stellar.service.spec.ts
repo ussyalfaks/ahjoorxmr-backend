@@ -127,12 +127,16 @@ describe('StellarService', () => {
   describe('verifyContributionForGroup()', () => {
     it('throws BadRequestException when tx hash is empty', async () => {
       await expect(
-        service.verifyContributionForGroup('', 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4'),
+        service.verifyContributionForGroup(
+          '',
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('returns true for valid contribute transaction with group contract address', async () => {
-      const groupContractAddress = 'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4';
+      const groupContractAddress =
+        'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4';
       mockServer.getTransaction.mockResolvedValue({
         status: 'SUCCESS',
         functionName: 'contribute',
@@ -158,8 +162,10 @@ describe('StellarService', () => {
     });
 
     it('returns false when transaction is against wrong contract address', async () => {
-      const groupContractAddress = 'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4';
-      const wrongContractAddress = 'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCSC4';
+      const groupContractAddress =
+        'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4';
+      const wrongContractAddress =
+        'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCSC4';
       mockServer.getTransaction.mockResolvedValue({
         status: 'SUCCESS',
         functionName: 'contribute',

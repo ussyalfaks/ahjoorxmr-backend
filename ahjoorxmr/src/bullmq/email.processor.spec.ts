@@ -85,7 +85,10 @@ describe('EmailProcessor', () => {
 
       await processor.process(job);
 
-      expect(mailService.sendWelcomeEmail).toHaveBeenCalledWith('test@example.com', 'John Doe');
+      expect(mailService.sendWelcomeEmail).toHaveBeenCalledWith(
+        'test@example.com',
+        'John Doe',
+      );
     });
 
     it('should handle SEND_NOTIFICATION_EMAIL job', async () => {
@@ -120,7 +123,9 @@ describe('EmailProcessor', () => {
         data: {},
       } as Job;
 
-      await expect(processor.process(job)).rejects.toThrow('Unknown email job type: UNKNOWN_JOB');
+      await expect(processor.process(job)).rejects.toThrow(
+        'Unknown email job type: UNKNOWN_JOB',
+      );
     });
   });
 
@@ -138,7 +143,11 @@ describe('EmailProcessor', () => {
 
       await processor.onFailed(job, error);
 
-      expect(deadLetterService.moveToDeadLetter).toHaveBeenCalledWith(job, error, QUEUE_NAMES.EMAIL);
+      expect(deadLetterService.moveToDeadLetter).toHaveBeenCalledWith(
+        job,
+        error,
+        QUEUE_NAMES.EMAIL,
+      );
     });
 
     it('should not move job to dead letter queue if retries remain', async () => {
