@@ -512,18 +512,19 @@ export class GroupsService {
       }
 
       // Send notifications
-      for (const membership of group.memberships || []) {
-        await this.notificationsService.notify({
-          userId: membership.userId,
-          type: NotificationType.ROUND_OPENED,
-          title: 'New Round Started',
-          body: `Round ${group.currentRound} has started for group "${group.name}"`,
-          metadata: {
-            groupId: group.id,
-            round: group.currentRound,
-          },
-        });
-      }
+      const notificationDtos = (group.memberships || []).map(membership => ({
+        userId: membership.userId,
+        type: NotificationType.ROUND_OPENED,
+        title: 'New Round Started',
+        body: `Round ${group.currentRound} has started for group "${group.name}"`,
+        metadata: {
+          groupId: group.id,
+          round: group.currentRound,
+        },
+        idempotencyKey: `${group.id}-${group.currentRound}-${membership.userId}-ROUND_OPENED`,
+      }));
+
+      await this.notificationsService.notifyBatch(notificationDtos);
     }
 
     const savedGroup = await this.groupRepository.save(group);
