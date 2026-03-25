@@ -30,4 +30,14 @@ export class NotifyDto {
   sendEmail?: boolean;
   emailTo?: string;
   emailTemplateData?: Record<string, any>;
+  idempotencyKey?: string;
+}
+
+export class CreateNotificationDto {
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  metadata?: Record<string, any>;
+  idempotencyKey?: string;
 }
