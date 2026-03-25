@@ -1,6 +1,8 @@
 import { Entity, Column, OneToMany, Index } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Membership } from '../../memberships/entities/membership.entity';
+import { KycStatus } from '../../kyc/entities/kyc-status.enum';
+import { KycDocument } from '../../kyc/entities/kyc-document.entity';
 
 /**
  * User entity representing a user in the system.
@@ -102,11 +104,23 @@ export class User extends BaseEntity {
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any> | null;
 
+  // KYC
+  @Column({
+    type: 'enum',
+    enum: KycStatus,
+    nullable: true,
+    default: null,
+  })
+  kycStatus?: KycStatus | null;
+
   // Relationships
   @OneToMany(() => Membership, (membership) => membership.user, {
     cascade: true,
   })
   memberships?: Membership[];
+
+  @OneToMany(() => KycDocument, (doc) => doc.user)
+  kycDocuments?: KycDocument[];
 
   // Virtual fields (not stored in database)
   get fullName(): string {

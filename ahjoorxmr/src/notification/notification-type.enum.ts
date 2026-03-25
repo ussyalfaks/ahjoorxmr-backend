@@ -6,4 +6,5 @@ export enum NotificationType {
   MEMBER_LEFT = 'member_left',
   MEMBER_REMOVED = 'member_removed',
   SYSTEM_ALERT = 'system_alert',
+  KYC_SUBMITTED = 'kyc_submitted',
 }
