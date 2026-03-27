@@ -30,7 +30,12 @@ import {
 } from './dto/two-factor.dto';
 import { TwoFactorService } from './two-factor.service';
 import { AuthService } from './auth.service';
-import { RegisterDto, LoginDto, RefreshTokenDto } from './dto/auth.dto';
+import {
+  RegisterDto,
+  LoginDto,
+  RefreshTokenDto,
+  RegisterWithWalletDto,
+} from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('Authentication')
@@ -62,6 +67,20 @@ export class AuthController {
   @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
+  }
+
+  @Post('wallet/register')
+  @Version('1')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: 'Register with Stellar wallet' })
+  @ApiResponse({ status: 201, description: 'Registration successful' })
+  @ApiResponse({ status: 401, description: 'Invalid signature' })
+  async registerWithWallet(@Body() dto: RegisterWithWalletDto) {
+    return this.authService.registerWithWallet(
+      dto.walletAddress,
+      dto.signature,
+      dto.challenge,
+    );
   }
 
   @Post('refresh')
@@ -196,7 +215,7 @@ export class AuthController {
     );
     const user = await this.authService.getUserForTokenGeneration(userId);
     const tokens = await this.authService.generateTokens(
-      user.id,
+      user.walletAddress,
       user.email ?? '',
       user.role,
     );

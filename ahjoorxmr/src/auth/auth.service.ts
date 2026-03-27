@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { TwoFactorService } from './two-factor.service';
+import { StellarService } from '../stellar/stellar.service';
 
 @Injectable()
 export class AuthService {
@@ -18,7 +19,38 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly twoFactorService: TwoFactorService,
+    private readonly stellarService: StellarService,
   ) { }
+
+  async registerWithWallet(walletAddress: string, signature: string, challenge: string) {
+    const isValid = this.stellarService.verifySignature(
+      walletAddress,
+      challenge,
+      signature,
+    );
+
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid signature');
+    }
+
+    let user = await this.usersService.findByWalletAddress(walletAddress);
+    if (!user) {
+      user = await this.usersService.create({
+        walletAddress,
+        role: 'user',
+        isActive: true,
+      });
+    }
+
+    const tokens = await this.generateTokens(
+      user.walletAddress,
+      user.email || '',
+      user.role,
+    );
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    return tokens;
+  }
 
   async register(registerDto: RegisterDto) {
     const { email, password, firstName, lastName } = registerDto;
@@ -39,7 +71,7 @@ export class AuthService {
     });
 
     const tokens = await this.generateTokens(
-      user.id,
+      user.walletAddress,
       user.email || '',
       user.role,
     );
@@ -77,7 +109,7 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(
-      user.id,
+      user.walletAddress,
       user.email || '',
       user.role,
     );
@@ -86,8 +118,8 @@ export class AuthService {
     return tokens;
   }
 
-  async refreshTokens(userId: string, refreshToken: string) {
-    const user = await this.usersService.findById(userId);
+  async refreshTokens(walletAddress: string, refreshToken: string) {
+    const user = await this.usersService.findByWalletAddress(walletAddress);
     if (!user || !user.refreshTokenHash) {
       throw new UnauthorizedException('Access Denied');
     }
@@ -98,15 +130,15 @@ export class AuthService {
     );
     if (!isRefreshTokenValid) {
       // Token theft detected - revoke all sessions
-      await this.usersService.revokeAllSessions(userId);
+      await this.usersService.revokeAllSessions(user.id);
       throw new UnauthorizedException('Access Denied');
     }
 
     // Increment token version for rotation
-    const newTokenVersion = await this.usersService.incrementTokenVersion(userId);
+    const newTokenVersion = await this.usersService.incrementTokenVersion(user.id);
 
     const tokens = await this.generateTokens(
-      user.id,
+      user.walletAddress,
       user.email || '',
       user.role,
       newTokenVersion,
@@ -136,13 +168,13 @@ export class AuthService {
     return this.usersService.findById(userId);
   }
 
-  async generateTokens(userId: string, email: string, role: string, tokenVersion?: number) {
-    const user = await this.usersService.findById(userId);
+  async generateTokens(sub: string, email: string, role: string, tokenVersion?: number) {
+    const user = await this.usersService.findByWalletAddress(sub);
     const version = tokenVersion ?? user.tokenVersion ?? 0;
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
-        { sub: userId, email, role, tokenVersion: version },
+        { sub, email, role, tokenVersion: version },
         {
           secret:
             this.configService.get<string>('JWT_ACCESS_SECRET') ||
@@ -151,7 +183,7 @@ export class AuthService {
         },
       ),
       this.jwtService.signAsync(
-        { sub: userId, email, role, tokenVersion: version },
+        { sub, email, role, tokenVersion: version },
         {
           secret:
             this.configService.get<string>('JWT_REFRESH_SECRET') ||

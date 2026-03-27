@@ -39,7 +39,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
 
             // Login to get initial tokens
             const loginTokens = await authService.generateTokens(
-                testUser.id,
+                testUser.walletAddress,
                 testUser.email || '',
                 testUser.role,
             );
@@ -47,7 +47,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
 
             // Refresh tokens
             const refreshedTokens = await authService.refreshTokens(
-                testUser.id,
+                testUser.walletAddress,
                 loginTokens.refreshToken,
             );
 
@@ -58,7 +58,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
 
         it('should include tokenVersion in JWT payload', async () => {
             const tokens = await authService.generateTokens(
-                testUser.id,
+                testUser.walletAddress,
                 testUser.email || '',
                 testUser.role,
                 5,
@@ -71,7 +71,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
         it('old refresh token should be rejected after rotation', async () => {
             // Generate initial tokens
             const initialTokens = await authService.generateTokens(
-                testUser.id,
+                testUser.walletAddress,
                 testUser.email || '',
                 testUser.role,
             );
@@ -79,13 +79,13 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
 
             // Refresh to get new tokens
             const newTokens = await authService.refreshTokens(
-                testUser.id,
+                testUser.walletAddress,
                 initialTokens.refreshToken,
             );
 
             // Try to use old refresh token - should fail
             await expect(
-                authService.refreshTokens(testUser.id, initialTokens.refreshToken),
+                authService.refreshTokens(testUser.walletAddress, initialTokens.refreshToken),
             ).rejects.toThrow(UnauthorizedException);
         });
     });
@@ -94,7 +94,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
         it('should detect token reuse and revoke all sessions', async () => {
             // Generate initial tokens
             const initialTokens = await authService.generateTokens(
-                testUser.id,
+                testUser.walletAddress,
                 testUser.email || '',
                 testUser.role,
             );
@@ -102,13 +102,13 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
 
             // Legitimate user refreshes
             const legitimateTokens = await authService.refreshTokens(
-                testUser.id,
+                testUser.walletAddress,
                 initialTokens.refreshToken,
             );
 
             // Attacker tries to use old token
             await expect(
-                authService.refreshTokens(testUser.id, initialTokens.refreshToken),
+                authService.refreshTokens(testUser.walletAddress, initialTokens.refreshToken),
             ).rejects.toThrow(UnauthorizedException);
 
             // Verify all sessions are revoked
@@ -118,7 +118,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
 
         it('should reject tokens with mismatched tokenVersion', async () => {
             const tokens = await authService.generateTokens(
-                testUser.id,
+                testUser.walletAddress,
                 testUser.email || '',
                 testUser.role,
                 1,
@@ -139,7 +139,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
         it('should clear refreshTokenHash on logout', async () => {
             // Generate and store tokens
             const tokens = await authService.generateTokens(
-                testUser.id,
+                testUser.walletAddress,
                 testUser.email || '',
                 testUser.role,
             );
@@ -168,7 +168,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
         it('should invalidate all active sessions on logout', async () => {
             // Generate tokens
             const tokens = await authService.generateTokens(
-                testUser.id,
+                testUser.walletAddress,
                 testUser.email || '',
                 testUser.role,
             );
@@ -179,7 +179,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
 
             // Try to refresh - should fail
             await expect(
-                authService.refreshTokens(testUser.id, tokens.refreshToken),
+                authService.refreshTokens(testUser.walletAddress, tokens.refreshToken),
             ).rejects.toThrow(UnauthorizedException);
         });
     });
@@ -188,7 +188,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
         it('should return 401 when tokenVersion does not match', async () => {
             // Create token with version 0
             const tokens = await authService.generateTokens(
-                testUser.id,
+                testUser.walletAddress,
                 testUser.email || '',
                 testUser.role,
                 0,
@@ -209,7 +209,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
     describe('Multiple Refresh Cycles', () => {
         it('should handle multiple refresh cycles correctly', async () => {
             let tokens = await authService.generateTokens(
-                testUser.id,
+                testUser.walletAddress,
                 testUser.email || '',
                 testUser.role,
             );
@@ -218,7 +218,7 @@ describe('Auth Integration Tests - Token Rotation & Revocation', () => {
             const versions: number[] = [];
 
             for (let i = 0; i < 3; i++) {
-                tokens = await authService.refreshTokens(testUser.id, tokens.refreshToken);
+                tokens = await authService.refreshTokens(testUser.walletAddress, tokens.refreshToken);
                 const decoded = await authService.verifyRefreshToken(tokens.refreshToken);
                 versions.push(decoded.tokenVersion);
             }

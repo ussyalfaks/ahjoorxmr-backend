@@ -20,7 +20,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    const user = await this.usersService.findById(payload.sub);
+    const user = await this.usersService.findByWalletAddress(payload.sub);
     if (!user) {
       throw new UnauthorizedException();
     }
@@ -30,6 +30,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token version mismatch - session revoked');
     }
 
-    return { id: user.id, email: user.email, role: user.role };
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      walletAddress: user.walletAddress,
+    };
   }
 }

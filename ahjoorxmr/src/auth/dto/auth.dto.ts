@@ -38,3 +38,20 @@ export class RefreshTokenDto {
   @IsNotEmpty()
   refreshToken: string;
 }
+
+export class RegisterWithWalletDto {
+  @ApiProperty({ example: 'GBVZM3OSDLSNP5LJJQAYZMJQJIQXQP5PGLLQZXEYQZRTDMZQNM3NLFB' })
+  @IsString()
+  @IsNotEmpty()
+  walletAddress: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  signature: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  challenge: string;
+}
