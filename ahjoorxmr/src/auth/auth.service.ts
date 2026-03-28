@@ -6,11 +6,15 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, LessThan } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { UsersService } from '../users/users.service';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
 import { TwoFactorService } from './two-factor.service';
 import { StellarService } from '../stellar/stellar.service';
+import { RefreshToken } from './entities/refresh-token.entity';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +24,8 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly twoFactorService: TwoFactorService,
     private readonly stellarService: StellarService,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepository: Repository<RefreshToken>,
   ) {}
 
   async registerWithWallet(
@@ -51,7 +57,7 @@ export class AuthService {
       user.email || '',
       user.role,
     );
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
+    await this.storeRefreshToken(user.id, tokens.refreshToken);
 
     return tokens;
   }
@@ -70,7 +76,7 @@ export class AuthService {
       password: hashedPassword,
       firstName,
       lastName,
-      walletAddress: `internal-${Date.now()}`, // Placeholder for internal users
+      walletAddress: `internal-${Date.now()}`,
       role: 'user',
     });
 
@@ -79,7 +85,7 @@ export class AuthService {
       user.email || '',
       user.role,
     );
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
+    await this.storeRefreshToken(user.id, tokens.refreshToken);
 
     return tokens;
   }
@@ -97,8 +103,6 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // If 2FA is enabled, issue a short-lived pre-auth token instead of full tokens.
-    // The client must POST /auth/2fa/login with this token + their TOTP code.
     if (user.twoFactorEnabled) {
       const preAuthToken = this.twoFactorService.issuePreAuthToken(
         user.id,
@@ -117,31 +121,49 @@ export class AuthService {
       user.email || '',
       user.role,
     );
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
+    await this.storeRefreshToken(user.id, tokens.refreshToken);
 
     return tokens;
   }
 
-  async refreshTokens(walletAddress: string, refreshToken: string) {
-    const user = await this.usersService.findByWalletAddress(walletAddress);
-    if (!user || !user.refreshTokenHash) {
+  /**
+   * Rotates the refresh token: verifies the incoming token hash exists and is
+   * not revoked, marks it revoked, then issues a new access + refresh pair.
+   * Reuse of a rotated token returns 401 Unauthorized.
+   */
+  async refreshTokens(incomingRefreshToken: string) {
+    // Verify JWT signature first
+    let payload: any;
+    try {
+      payload = await this.jwtService.verifyAsync(incomingRefreshToken, {
+        secret:
+          this.configService.get<string>('JWT_REFRESH_SECRET') ||
+          'default_refresh_secret',
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const tokenHash = this.hashToken(incomingRefreshToken);
+
+    const stored = await this.refreshTokenRepository.findOne({
+      where: { tokenHash },
+    });
+
+    if (!stored || stored.revokedAt !== null || stored.expiresAt < new Date()) {
+      // Possible token reuse — revoke all tokens for this user
+      if (stored?.userId) {
+        await this.revokeAllUserTokens(stored.userId);
+      }
       throw new UnauthorizedException('Access Denied');
     }
 
-    const isRefreshTokenValid = await bcrypt.compare(
-      refreshToken,
-      user.refreshTokenHash,
-    );
-    if (!isRefreshTokenValid) {
-      // Token theft detected - revoke all sessions
-      await this.usersService.revokeAllSessions(user.id);
-      throw new UnauthorizedException('Access Denied');
-    }
+    // Rotate: revoke old token
+    stored.revokedAt = new Date();
+    await this.refreshTokenRepository.save(stored);
 
-    // Increment token version for rotation
-    const newTokenVersion = await this.usersService.incrementTokenVersion(
-      user.id,
-    );
+    const user = await this.usersService.findById(stored.userId);
+    const newTokenVersion = await this.usersService.incrementTokenVersion(user.id);
 
     const tokens = await this.generateTokens(
       user.walletAddress,
@@ -149,9 +171,44 @@ export class AuthService {
       user.role,
       newTokenVersion,
     );
-    await this.updateRefreshToken(user.id, tokens.refreshToken);
+    await this.storeRefreshToken(user.id, tokens.refreshToken);
 
     return tokens;
+  }
+
+  /**
+   * Revokes the current refresh token immediately (logout).
+   */
+  async logout(userId: string, refreshToken?: string): Promise<void> {
+    if (refreshToken) {
+      const tokenHash = this.hashToken(refreshToken);
+      await this.refreshTokenRepository.update({ tokenHash }, { revokedAt: new Date() });
+    } else {
+      await this.revokeAllUserTokens(userId);
+    }
+    await this.usersService.revokeAllSessions(userId);
+  }
+
+  /**
+   * Admin: revoke all refresh tokens for a given user (force sign-out).
+   */
+  async revokeAllUserTokens(userId: string): Promise<void> {
+    await this.refreshTokenRepository.update(
+      { userId, revokedAt: null as any },
+      { revokedAt: new Date() },
+    );
+    await this.usersService.revokeAllSessions(userId);
+  }
+
+  /**
+   * Cleanup job: delete expired refresh token rows.
+   * Called by the daily BullMQ/scheduler job.
+   */
+  async deleteExpiredTokens(): Promise<number> {
+    const result = await this.refreshTokenRepository.delete({
+      expiresAt: LessThan(new Date()),
+    });
+    return result.affected ?? 0;
   }
 
   async verifyRefreshToken(token: string) {
@@ -204,18 +261,24 @@ export class AuthService {
       ),
     ]);
 
-    return {
-      accessToken,
-      refreshToken,
-    };
+    return { accessToken, refreshToken };
   }
 
+  /** @deprecated Use storeRefreshToken instead */
   async updateRefreshToken(userId: string, refreshToken: string) {
-    const hash = await this.hashPassword(refreshToken);
-    await this.usersService.updateRefreshToken(userId, hash);
+    await this.storeRefreshToken(userId, refreshToken);
   }
 
-  async logout(userId: string): Promise<void> {
-    await this.usersService.revokeAllSessions(userId);
+  // ── Private helpers ────────────────────────────────────────────────────────
+
+  private async storeRefreshToken(userId: string, refreshToken: string): Promise<void> {
+    const tokenHash = this.hashToken(refreshToken);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const record = this.refreshTokenRepository.create({ userId, tokenHash, expiresAt });
+    await this.refreshTokenRepository.save(record);
+  }
+
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 }

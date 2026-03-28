@@ -9,12 +9,15 @@ import {
   UnauthorizedException,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiParam,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { UserProfileDto } from './dto/auth-response.dto';
@@ -37,6 +40,8 @@ import {
   RegisterWithWalletDto,
 } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -90,9 +95,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
   async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
     try {
-      const { refreshToken } = refreshTokenDto;
-      const payload = await this.authService.verifyRefreshToken(refreshToken);
-      return this.authService.refreshTokens(payload.sub, refreshToken);
+      return await this.authService.refreshTokens(refreshTokenDto.refreshToken);
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -105,8 +108,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout user' })
   @ApiResponse({ status: 200, description: 'Logout successful' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async logout(@Req() req: any): Promise<{ message: string }> {
-    await this.authService.logout(req.user.id);
+  async logout(@Req() req: any, @Body() body: RefreshTokenDto): Promise<{ message: string }> {
+    await this.authService.logout(req.user.id, body?.refreshToken);
     return { message: 'Logout successful' };
   }
 
@@ -221,5 +224,28 @@ export class AuthController {
     );
     await this.authService.updateRefreshToken(user.id, tokens.refreshToken);
     return tokens;
+  }
+
+  // ── Admin endpoints ────────────────────────────────────────────────────────
+
+  @Post('admin/users/:userId/revoke-tokens')
+  @Version('1')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Revoke all refresh tokens for a user (Admin)',
+    description: 'Force sign-out: revokes all active refresh tokens for the specified user.',
+  })
+  @ApiParam({ name: 'userId', description: 'User UUID', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'All tokens revoked' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden – admin only' })
+  async adminRevokeUserTokens(
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<{ message: string }> {
+    await this.authService.revokeAllUserTokens(userId);
+    return { message: 'All refresh tokens revoked' };
   }
 }

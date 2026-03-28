@@ -1,12 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { DistributedLockService } from './services/distributed-lock.service';
 import { AuditLogService } from './services/audit-log.service';
 import { ContributionSummaryService } from './services/contribution-summary.service';
 import { GroupStatusService } from './services/group-status.service';
 import { StaleGroupDetectionService } from './services/stale-group-detection.service';
 import { RoundAdvanceService } from './services/round-advance.service';
+import { RefreshToken } from '../auth/entities/refresh-token.entity';
 
 @Injectable()
 export class SchedulerService {
@@ -22,6 +25,8 @@ export class SchedulerService {
     private readonly staleGroupDetectionService: StaleGroupDetectionService,
     private readonly roundAdvanceService: RoundAdvanceService,
     private readonly configService: ConfigService,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepository: Repository<RefreshToken>,
   ) {}
 
   /**
@@ -215,10 +220,38 @@ export class SchedulerService {
   }
 
   /**
+   * Daily task: Clean up expired refresh token rows (runs at 4 AM).
+   * Keeps the refresh_tokens table lean and ensures expired tokens cannot be reused.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_4AM, { name: 'cleanup-expired-refresh-tokens' })
+  async handleCleanupExpiredRefreshTokens(): Promise<void> {
+    const taskName = 'cleanup-expired-refresh-tokens';
+    this.logger.log(`Starting task: ${taskName}`);
+
+    const result = await this.lockService.withLock(
+      taskName,
+      async () => {
+        return await this.executeWithRetry(async () => {
+          const deleted = await this.refreshTokenRepository.delete({
+            expiresAt: LessThan(new Date()),
+          });
+          return { deletedCount: deleted.affected ?? 0 };
+        }, taskName);
+      },
+      300,
+    );
+
+    if (result) {
+      this.logger.log(`Task ${taskName} completed. Deleted ${result.deletedCount} expired refresh tokens.`);
+    } else {
+      this.logger.warn(`Task ${taskName} was skipped (lock not acquired)`);
+    }
+  }
+
+  /**
    * Execute a task with exponential backoff retry logic
    */
-  private async executeWithRetry<T>(
-    fn: () => Promise<T>,
+  private async executeWithRetry<T>(    fn: () => Promise<T>,
     taskName: string,
   ): Promise<T> {
     let lastError: Error | undefined;

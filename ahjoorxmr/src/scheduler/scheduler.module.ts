@@ -16,11 +16,12 @@ import { Membership } from '../memberships/entities/membership.entity';
 import { NotificationsService } from '../notification/notifications.service';
 import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notification/notifications.module';
+import { RefreshToken } from '../auth/entities/refresh-token.entity';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    TypeOrmModule.forFeature([AuditLog, Contribution, Group, Membership]),
+    TypeOrmModule.forFeature([AuditLog, Contribution, Group, Membership, RefreshToken]),
     GroupsModule,
     NotificationsModule,
   ],

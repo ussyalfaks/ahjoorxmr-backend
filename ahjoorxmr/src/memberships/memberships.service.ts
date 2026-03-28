@@ -285,34 +285,40 @@ export class MembershipsService {
   }
 
   /**
-   * Lists all members of a ROSCA group.
-   * Returns all memberships for the specified group ordered by payout order.
-   * Returns an empty array if the group has no members or doesn't exist.
+   * Lists members of a ROSCA group with pagination.
+   * Returns memberships ordered by payout order.
    *
    * @param groupId - The UUID of the group to list members for
-   * @returns Array of Membership entities ordered by payoutOrder ascending
+   * @param page - Page number (1-indexed, default 1)
+   * @param limit - Items per page (default 20, max 100)
+   * @returns Paginated result with data, total, page, and limit
    */
-  async listMembers(groupId: string): Promise<Membership[]> {
+  async listMembers(
+    groupId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{ data: Membership[]; total: number; page: number; limit: number }> {
     this.logger.log(
-      `Listing members for group ${groupId}`,
+      `Listing members for group ${groupId} page=${page} limit=${limit}`,
       'MembershipsService',
     );
 
     try {
-      // Query all memberships for groupId ordered by payoutOrder ASC
-      const members = await this.membershipRepository.find({
+      const skip = (page - 1) * limit;
+      const [data, total] = await this.membershipRepository.findAndCount({
         where: { groupId },
         order: { payoutOrder: 'ASC' },
+        skip,
+        take: limit,
       });
 
       this.logger.log(
-        `Found ${members.length} members for group ${groupId}`,
+        `Found ${total} members for group ${groupId}; returning page ${page}`,
         'MembershipsService',
       );
 
-      return members;
+      return { data, total, page, limit };
     } catch (error) {
-      // Log and re-throw unexpected errors
       this.logger.error(
         `Failed to list members for group ${groupId}: ${error.message}`,
         error.stack,

@@ -12,6 +12,7 @@ import {
   UseGuards,
   Request,
   Version,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,15 +20,19 @@ import {
   ApiResponse,
   ApiParam,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { MembershipsService } from './memberships.service';
 import { CreateMembershipDto } from './dto/create-membership.dto';
 import { UpdatePayoutOrderDto } from './dto/update-payout-order.dto';
-import { MembershipResponseDto } from './dto/membership-response.dto';
+import { MembershipResponseDto, PaginatedMembershipsResponseDto } from './dto/membership-response.dto';
 import { RecordPayoutDto } from './dto/record-payout.dto';
 import { JwtAuthGuard } from '../groups/guards/jwt-auth.guard';
+import { WalletThrottlerGuard } from '../throttler/guards/wallet-throttler.guard';
 import { AuditLog } from '../audit/decorators/audit-log.decorator';
 import { ErrorResponseDto } from '../common/dto/error-response.dto';
+import { PaginationQueryDto } from '../groups/dto/pagination-query.dto';
+import { Throttle } from '@nestjs/throttler';
 
 /**
  * Controller for managing ROSCA group memberships.
@@ -145,22 +150,30 @@ export class MembershipsController {
   }
 
   /**
-   * Lists all members of a ROSCA group.
-   * Returns members ordered by payout order (position in the payout queue).
+   * Lists members of a ROSCA group with pagination.
+   * Returns members ordered by payout order.
    *
    * @param groupId - The UUID of the group (validated by ParseUUIDPipe)
-   * @returns Array of memberships with HTTP 200 status
+   * @param query - Pagination params (page, limit)
+   * @returns Paginated memberships with HTTP 200 status
    */
   @Get(':id/members')
   @ApiOperation({
     summary: 'List group members',
-    description: 'Lists all members of a ROSCA group, ordered by payout order',
+    description: 'Lists members of a ROSCA group with pagination, ordered by payout order',
   })
   @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20, max: 100)', example: 20 })
   @ApiResponse({
     status: 200,
     description: 'Successfully retrieved group members',
-    type: [MembershipResponseDto],
+    type: PaginatedMembershipsResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid pagination params',
+    type: ErrorResponseDto,
   })
   @ApiResponse({
     status: 404,
@@ -169,22 +182,29 @@ export class MembershipsController {
   })
   async listMembers(
     @Param('id', ParseUUIDPipe) groupId: string,
-  ): Promise<MembershipResponseDto[]> {
-    const memberships = await this.membershipsService.listMembers(groupId);
+    @Query() query: PaginationQueryDto,
+  ): Promise<PaginatedMembershipsResponseDto> {
+    const { page = 1, limit = 20 } = query;
+    const result = await this.membershipsService.listMembers(groupId, page, limit);
 
-    return memberships.map((membership) => ({
-      id: membership.id,
-      groupId: membership.groupId,
-      userId: membership.userId,
-      walletAddress: membership.walletAddress,
-      payoutOrder: membership.payoutOrder,
-      hasReceivedPayout: membership.hasReceivedPayout,
-      hasPaidCurrentRound: membership.hasPaidCurrentRound,
-      transactionHash: membership.transactionHash,
-      status: membership.status,
-      createdAt: membership.createdAt.toISOString(),
-      updatedAt: membership.updatedAt.toISOString(),
-    }));
+    return {
+      data: result.data.map((membership) => ({
+        id: membership.id,
+        groupId: membership.groupId,
+        userId: membership.userId,
+        walletAddress: membership.walletAddress,
+        payoutOrder: membership.payoutOrder,
+        hasReceivedPayout: membership.hasReceivedPayout,
+        hasPaidCurrentRound: membership.hasPaidCurrentRound,
+        transactionHash: membership.transactionHash,
+        status: membership.status,
+        createdAt: membership.createdAt.toISOString(),
+        updatedAt: membership.updatedAt.toISOString(),
+      })),
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    };
   }
 
   /**
@@ -283,6 +303,7 @@ export class MembershipsController {
   /**
    * Records a payout to a member.
    * Admin-only endpoint that marks a member as having received their payout.
+   * Rate limited to 5 requests per minute per authenticated user.
    *
    * @param groupId - The UUID of the group
    * @param recordPayoutDto - Payout details (recipientUserId and transactionHash)
@@ -292,8 +313,12 @@ export class MembershipsController {
    * @throws ConflictException if member already received payout
    */
   @Post(':id/payout')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WalletThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Record payout to member' })
+  @ApiResponse({ status: 200, description: 'Payout recorded', type: MembershipResponseDto })
+  @ApiResponse({ status: 429, description: 'Too many requests – rate limit exceeded', type: ErrorResponseDto })
   async recordPayout(
     @Param('id', ParseUUIDPipe) groupId: string,
     @Body() recordPayoutDto: RecordPayoutDto,

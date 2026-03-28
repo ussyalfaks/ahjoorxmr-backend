@@ -44,6 +44,7 @@ import { Membership } from '../memberships/entities/membership.entity';
 import { MembershipResponseDto } from '../memberships/dto/membership-response.dto';
 import { AuditLog } from '../audit/decorators/audit-log.decorator';
 import { ErrorResponseDto } from '../common/dto/error-response.dto';
+import { PaginationQueryDto } from './dto/pagination-query.dto';
 
 /**
  * Controller for managing ROSCA groups.
@@ -126,20 +127,8 @@ export class GroupsController {
     summary: 'Get all ROSCA groups with pagination',
     description: 'Returns a paginated list of all ROSCA groups',
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number',
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page',
-    example: 10,
-  })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20, max: 100)', example: 20 })
   @ApiQuery({
     name: 'includeArchived',
     required: false,
@@ -159,13 +148,14 @@ export class GroupsController {
     description: 'Successfully retrieved groups',
     type: PaginatedGroupsResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'Invalid pagination params', type: ErrorResponseDto })
   async findAll(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query() pagination: PaginationQueryDto,
     @Query('includeArchived', new DefaultValuePipe(false), ParseBoolPipe)
     includeArchived: boolean,
     @Query('filter') filter?: string,
   ): Promise<PaginatedGroupsResponseDto> {
+    const { page = 1, limit = 20 } = pagination;
     const result = await this.groupsService.findAll(
       page,
       limit,

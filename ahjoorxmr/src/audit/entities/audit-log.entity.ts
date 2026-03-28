@@ -6,11 +6,21 @@ import {
   Index,
 } from 'typeorm';
 
+/**
+ * Audit log entity.
+ *
+ * Index strategy (see migration 1743210000000-AddAuditLogIndexes):
+ *  - idx_audit_user_id      : single-column on userId
+ *  - idx_audit_resource     : single-column on resource
+ *  - idx_audit_created_at   : single-column on timestamp DESC
+ *  - idx_audit_user_created : composite (userId, timestamp DESC) for
+ *                             "recent activity for a user" queries
+ */
 @Entity('audit_logs')
-@Index(['userId'])
-@Index(['action'])
-@Index(['resource'])
-@Index(['createdAt'])
+@Index('idx_audit_user_id', ['userId'])
+@Index('idx_audit_resource', ['resource'])
+@Index('idx_audit_created_at', ['timestamp'])
+@Index('idx_audit_user_created', ['userId', 'timestamp'])
 export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { HealthService } from './health.service';
 import {
   HealthResponseDto,
@@ -7,8 +8,13 @@ import {
 } from './dto/health-response.dto';
 import { InternalServerErrorResponseDto } from '../common/dto/error-response.dto';
 
+/**
+ * Health check endpoints use a lenient throttle (300 req/min) so monitoring
+ * tools are never locked out by the global per-user rate limit.
+ */
 @ApiTags('Health')
 @Controller('health')
+@Throttle({ default: { limit: 300, ttl: 60000 } })
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
