@@ -1,0 +1,202 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ahjoorxmr-api
+  labels:
+    app: ahjoorxmr-api
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0 # Ensure zero downtime during deployments
+  selector:
+    matchLabels:
+      app: ahjoorxmr-api
+  template:
+    metadata:
+      labels:
+        app: ahjoorxmr-api
+        version: v1
+    spec:
+      # Graceful shutdown configuration
+      terminationGracePeriodSeconds: 20 # Allow 20s for graceful shutdown (5s buffer over SHUTDOWN_TIMEOUT_MS)
+
+      containers:
+        - name: api
+          image: ahjoorxmr/api:latest
+          imagePullPolicy: Always
+
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+
+          env:
+            # Application Configuration
+            - name: NODE_ENV
+              value: 'production'
+            - name: PORT
+              value: '3000'
+
+            # Graceful Shutdown Configuration
+            - name: SHUTDOWN_TIMEOUT_MS
+              value: '15000' # 15 seconds for graceful shutdown
+
+            # Database Configuration (from ConfigMap/Secret)
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ahjoorxmr-config
+                  key: db-host
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: ahjoorxmr-config
+                  key: db-port
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ahjoorxmr-config
+                  key: db-name
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: ahjoorxmr-secrets
+                  key: db-username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ahjoorxmr-secrets
+                  key: db-password
+
+            # Redis Configuration
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: ahjoorxmr-config
+                  key: redis-host
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: ahjoorxmr-config
+                  key: redis-port
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ahjoorxmr-secrets
+                  key: redis-password
+
+            # JWT Configuration
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ahjoorxmr-secrets
+                  key: jwt-private-key
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: ahjoorxmr-secrets
+                  key: jwt-refresh-secret
+
+          # Health checks
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          # Startup probe for slow-starting containers
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30 # Allow up to 150s for startup
+
+          # Resource limits
+          resources:
+            requests:
+              memory: '256Mi'
+              cpu: '250m'
+            limits:
+              memory: '512Mi'
+              cpu: '500m'
+
+          # Lifecycle hooks
+          lifecycle:
+            preStop:
+              exec:
+                # Give the app a moment to start graceful shutdown before K8s removes it from service
+                command: ['/bin/sh', '-c', 'sleep 2']
+
+      # Pod disruption budget (separate resource, shown here for reference)
+      # Ensures at least 2 pods are available during voluntary disruptions
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ahjoorxmr-api
+  labels:
+    app: ahjoorxmr-api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: ahjoorxmr-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ahjoorxmr-api-pdb
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: ahjoorxmr-api
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ahjoorxmr-config
+data:
+  db-host: 'postgres-service'
+  db-port: '5432'
+  db-name: 'ahjoorxmr'
+  redis-host: 'redis-service'
+  redis-port: '6379'
+---
+# Example Secret (values should be base64 encoded in production)
+# Create with: kubectl create secret generic ahjoorxmr-secrets --from-literal=db-username=... --from-literal=db-password=...
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ahjoorxmr-secrets
+type: Opaque
+data:
+  # These are example base64-encoded values - replace with actual secrets
+  db-username: cG9zdGdyZXM= # postgres
+  db-password: cG9zdGdyZXM= # postgres
+  redis-password: ''
+  jwt-private-key: eW91cl9qd3RfcHJpdmF0ZV9rZXk= # your_jwt_private_key
+  jwt-refresh-secret: eW91cl9qd3RfcmVmcmVzaF9zZWNyZXQ= # your_jwt_refresh_secret

@@ -38,6 +38,22 @@ export class GroupSyncProcessor extends WorkerHost {
     super();
   }
 
+  async onModuleDestroy(): Promise<void> {
+    this.logger.log(
+      `[${new Date().toISOString()}] Closing GroupSyncProcessor worker, draining active jobs...`,
+    );
+    try {
+      await this.worker?.close();
+      this.logger.log(
+        `[${new Date().toISOString()}] GroupSyncProcessor worker closed successfully`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[${new Date().toISOString()}] Error closing GroupSyncProcessor worker: ${error.message}`,
+      );
+    }
+  }
+
   async process(job: Job): Promise<unknown> {
     this.logger.debug(`Processing group-sync job [${job.name}] id=${job.id}`);
 

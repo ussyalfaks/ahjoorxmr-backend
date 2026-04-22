@@ -12,6 +12,7 @@ import {
   ParseIntPipe,
   Request,
   Version,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -21,6 +22,7 @@ import {
   ApiQuery,
   ApiBody,
   ApiSecurity,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { ContributionsService } from './contributions.service';
@@ -32,6 +34,10 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { WalletThrottlerGuard } from '../throttler/guards/wallet-throttler.guard';
 import { AuditLog } from '../audit/decorators/audit-log.decorator';
 import { ErrorResponseDto } from '../common/dto/error-response.dto';
+import {
+  IdempotencyInterceptor,
+  RequiresIdempotency,
+} from '../common/interceptors/idempotency.interceptor';
 
 /**
  * Controller for managing ROSCA group contributions.
@@ -59,10 +65,17 @@ export class ContributionsController {
   @ApiSecurity('JWT-auth')
   @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 requests per minute per wallet
   @HttpCode(HttpStatus.CREATED)
+  @RequiresIdempotency()
   @ApiOperation({
     summary: 'Create contribution record (internal)',
     description:
-      'Creates a new contribution record. Protected by API key. Rate limited to 10 requests per minute.',
+      'Creates a new contribution record. Protected by API key. Rate limited to 10 requests per minute. Requires Idempotency-Key header (UUID v4).',
+  })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    description: 'UUID v4 for idempotent request handling',
+    required: true,
+    schema: { type: 'string', format: 'uuid' },
   })
   @ApiBody({ type: CreateContributionDto })
   @ApiResponse({
@@ -72,7 +85,8 @@ export class ContributionsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid input data or foreign key violation',
+    description:
+      'Invalid input data, foreign key violation, or missing/invalid Idempotency-Key',
     type: ErrorResponseDto,
   })
   @ApiResponse({

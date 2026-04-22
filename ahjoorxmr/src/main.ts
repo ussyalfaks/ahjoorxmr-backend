@@ -16,6 +16,9 @@ async function bootstrap() {
     logger: new WinstonLogger(),
   });
 
+  // Enable graceful shutdown hooks for SIGTERM and SIGINT
+  app.enableShutdownHooks();
+
   // Get Reflector for interceptors
   const reflector = app.get(Reflector);
 
@@ -200,5 +203,43 @@ async function bootstrap() {
   await app.listen(port);
 
   console.log(`Application is running on: http://localhost:${port}`);
+
+  // Setup graceful shutdown with timeout
+  const shutdownTimeoutMs = parseInt(
+    process.env.SHUTDOWN_TIMEOUT_MS || '15000',
+    10,
+  );
+
+  const gracefulShutdown = async (signal: string) => {
+    console.log(
+      `\n[${new Date().toISOString()}] Received ${signal}, starting graceful shutdown...`,
+    );
+
+    const shutdownTimer = setTimeout(() => {
+      console.error(
+        `[${new Date().toISOString()}] Graceful shutdown timeout (${shutdownTimeoutMs}ms) exceeded, forcing exit`,
+      );
+      process.exit(1);
+    }, shutdownTimeoutMs);
+
+    try {
+      await app.close();
+      clearTimeout(shutdownTimer);
+      console.log(
+        `[${new Date().toISOString()}] Application closed successfully`,
+      );
+      process.exit(0);
+    } catch (error) {
+      clearTimeout(shutdownTimer);
+      console.error(
+        `[${new Date().toISOString()}] Error during shutdown:`,
+        error,
+      );
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 void bootstrap();

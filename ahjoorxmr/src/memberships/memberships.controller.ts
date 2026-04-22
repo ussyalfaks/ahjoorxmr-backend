@@ -41,6 +41,7 @@ import { Throttle } from '@nestjs/throttler';
 @ApiTags('Memberships')
 @Controller('groups')
 @Version('1')
+@UseInterceptors(IdempotencyInterceptor)
 export class MembershipsController {
   constructor(private readonly membershipsService: MembershipsService) {}
 
@@ -309,7 +310,7 @@ export class MembershipsController {
    * @param recordPayoutDto - Payout details (recipientUserId and transactionHash)
    * @returns The updated membership with HTTP 200 status
    * @throws NotFoundException if group or membership doesn't exist
-   * @throws BadRequestException if group is not ACTIVE
+   * @throws BadRequestException if group is not ACTIVE or Idempotency-Key is missing/invalid
    * @throws ConflictException if member already received payout
    */
   @Post(':id/payout')

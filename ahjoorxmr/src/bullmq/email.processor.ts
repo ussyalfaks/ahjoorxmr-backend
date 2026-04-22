@@ -1,5 +1,5 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { QUEUE_NAMES, JOB_NAMES, BACKOFF_DELAYS } from './queue.constants';
 import {
@@ -14,7 +14,7 @@ import { MailService } from '../mail/mail.service';
   concurrency: 5,
   limiter: { max: 50, duration: 60_000 },
 })
-export class EmailProcessor extends WorkerHost {
+export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
   private readonly logger = new Logger(EmailProcessor.name);
 
   constructor(
@@ -22,6 +22,22 @@ export class EmailProcessor extends WorkerHost {
     private readonly mailService: MailService,
   ) {
     super();
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    this.logger.log(
+      `[${new Date().toISOString()}] Closing EmailProcessor worker, draining active jobs...`,
+    );
+    try {
+      await this.worker?.close();
+      this.logger.log(
+        `[${new Date().toISOString()}] EmailProcessor worker closed successfully`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[${new Date().toISOString()}] Error closing EmailProcessor worker: ${error.message}`,
+      );
+    }
   }
 
   async process(job: Job): Promise<unknown> {

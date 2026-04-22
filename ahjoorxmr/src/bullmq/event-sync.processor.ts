@@ -36,6 +36,22 @@ export class EventSyncProcessor extends WorkerHost {
     super();
   }
 
+  async onModuleDestroy(): Promise<void> {
+    this.logger.log(
+      `[${new Date().toISOString()}] Closing EventSyncProcessor worker, draining active jobs...`,
+    );
+    try {
+      await this.worker?.close();
+      this.logger.log(
+        `[${new Date().toISOString()}] EventSyncProcessor worker closed successfully`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `[${new Date().toISOString()}] Error closing EventSyncProcessor worker: ${error.message}`,
+      );
+    }
+  }
+
   async process(job: Job): Promise<unknown> {
     this.logger.debug(`Processing event-sync job [${job.name}] id=${job.id}`);
 
