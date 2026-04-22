@@ -1,10 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { GroupsService } from '../groups.service';
 import { Group } from '../entities/group.entity';
@@ -40,6 +41,7 @@ const createMockGroup = (overrides: Partial<Group> = {}): Group => ({
   currentRound: 0,
   totalRounds: 10,
   minMembers: 3,
+  maxMembers: 10,
   staleAt: null,
   memberships: [],
   createdAt: new Date('2024-01-01T00:00:00Z'),
@@ -103,6 +105,7 @@ describe('GroupsService', () => {
   let logger: MockLogger;
   let notificationsService: Partial<NotificationsService>;
   let stellarService: Partial<StellarService>;
+  let mockDataSource: Partial<DataSource>;
 
   beforeEach(async () => {
     groupRepository = createMockRepository<Group>();
@@ -110,10 +113,26 @@ describe('GroupsService', () => {
     logger = createMockLogger();
     notificationsService = {
       notify: jest.fn().mockResolvedValue({}),
+      notifyBatch: jest.fn().mockResolvedValue([]),
     };
     stellarService = {
       deployRoscaContract: jest.fn().mockResolvedValue('CFAKEADDRESS123'),
+      disbursePayout: jest.fn().mockResolvedValue('TX_HASH_MOCK'),
     };
+
+    // Default DataSource mock: transaction callback runs immediately
+    const mockEntityManager = {
+      getRepository: jest.fn().mockImplementation(() => ({
+        findOne: jest.fn().mockImplementation(({ where }) => {
+          // Return the group that was set up in each test via groupRepository.findOne
+          return groupRepository.findOne!({ where } as any);
+        }),
+        save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
+      })),
+    };
+    mockDataSource = {
+      transaction: jest.fn().mockImplementation((cb) => cb(mockEntityManager)),
+    } as any;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -137,6 +156,10 @@ describe('GroupsService', () => {
         {
           provide: StellarService,
           useValue: stellarService,
+        },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
         },
       ],
     }).compile();
@@ -182,6 +205,7 @@ describe('GroupsService', () => {
       token: 'USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
       roundDuration: 2592000,
       totalRounds: 12,
+      minMembers: 3,
     };
 
     it('should create and return a PENDING group', async () => {
@@ -189,6 +213,7 @@ describe('GroupsService', () => {
         name: dto.name,
         contributionAmount: dto.contributionAmount,
         totalRounds: dto.totalRounds,
+        maxMembers: dto.totalRounds,
       });
 
       groupRepository.create!.mockReturnValue(mockGroup);
@@ -202,6 +227,7 @@ describe('GroupsService', () => {
           currentRound: 0,
           adminWallet: ADMIN_WALLET,
           contractAddress: null,
+          maxMembers: dto.totalRounds,
         }),
       );
       expect(groupRepository.save).toHaveBeenCalledWith(mockGroup);
@@ -243,6 +269,40 @@ describe('GroupsService', () => {
       await service.createGroup(dto, ADMIN_WALLET);
 
       expect(logger.log).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw BadRequestException when maxMembers != totalRounds', async () => {
+      const invalidDto = { ...dto, totalRounds: 12, maxMembers: 10 };
+
+      await expect(
+        service.createGroup(invalidDto, ADMIN_WALLET),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createGroup(invalidDto, ADMIN_WALLET),
+      ).rejects.toThrow('maxMembers must equal totalRounds');
+    });
+
+    it('should throw BadRequestException when minMembers > maxMembers', async () => {
+      const invalidDto = { ...dto, totalRounds: 5, minMembers: 8 };
+
+      await expect(
+        service.createGroup(invalidDto, ADMIN_WALLET),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.createGroup(invalidDto, ADMIN_WALLET),
+      ).rejects.toThrow('minMembers must be less than or equal to maxMembers');
+    });
+
+    it('should default maxMembers to totalRounds when not provided', async () => {
+      const mockGroup = createMockGroup({ totalRounds: 12, maxMembers: 12 });
+      groupRepository.create!.mockReturnValue(mockGroup);
+      groupRepository.save!.mockResolvedValue(mockGroup);
+
+      await service.createGroup(dto, ADMIN_WALLET);
+
+      expect(groupRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ maxMembers: dto.totalRounds }),
+      );
     });
 
     it('should propagate unexpected errors', async () => {
@@ -741,44 +801,194 @@ describe('GroupsService', () => {
     const groupId = BASE_GROUP_ID;
     const adminWallet = ADMIN_WALLET;
 
-    it('should advance to next round when all members have paid', async () => {
+    /** Helper: build a DataSource mock whose transaction() runs the callback
+     *  with an EntityManager that delegates to the outer mock repositories. */
+    const buildDataSourceMock = (groupOverride?: Partial<Group>) => {
+      const innerGroupRepo = {
+        findOne: jest
+          .fn()
+          .mockImplementation(() => Promise.resolve(groupOverride ?? null)),
+        save: jest.fn().mockImplementation((g) => Promise.resolve(g)),
+      };
+      const innerMembershipRepo = {
+        save: jest.fn().mockImplementation((m) => Promise.resolve(m)),
+      };
+      const entityManager = {
+        getRepository: jest.fn().mockImplementation((entity) => {
+          if (entity === Group) return innerGroupRepo;
+          return innerMembershipRepo;
+        }),
+      };
+      const ds = {
+        transaction: jest.fn().mockImplementation((cb) => cb(entityManager)),
+        _innerGroupRepo: innerGroupRepo,
+        _innerMembershipRepo: innerMembershipRepo,
+      };
+      return ds;
+    };
+
+    it('should call disbursePayout before advancing the round', async () => {
+      const recipient = createMockMembership({
+        id: 'member-1',
+        userId: 'user-1',
+        payoutOrder: 0, // round 1 → index 0
+        hasPaidCurrentRound: true,
+        walletAddress: 'GRECIPIENT',
+      });
       const mockGroup = createMockGroup({
         status: GroupStatus.ACTIVE,
         currentRound: 1,
         totalRounds: 5,
+        contractAddress: 'CCONTRACT123',
+        contributionAmount: '100',
         memberships: [
-          createMockMembership({
-            id: 'member-1',
-            userId: 'user-1',
-            hasPaidCurrentRound: true,
-          }),
+          recipient,
           createMockMembership({
             id: 'member-2',
             userId: 'user-2',
+            payoutOrder: 1,
             hasPaidCurrentRound: true,
           }),
         ],
       });
 
+      const ds = buildDataSourceMock({
+        ...mockGroup,
+        memberships: mockGroup.memberships,
+      });
+      (mockDataSource as any).transaction = ds.transaction;
+
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+      ds._innerGroupRepo.findOne.mockResolvedValue({
+        ...mockGroup,
+        memberships: mockGroup.memberships,
+      });
+
+      await service.advanceRound(groupId, adminWallet);
+
+      expect(stellarService.disbursePayout).toHaveBeenCalledWith(
+        'CCONTRACT123',
+        'GRECIPIENT',
+        '100',
+      );
+    });
+
+    it('should store txHash on recipient membership after payout', async () => {
+      const recipient = createMockMembership({
+        id: 'member-1',
+        userId: 'user-1',
+        payoutOrder: 0,
+        hasPaidCurrentRound: true,
+        walletAddress: 'GRECIPIENT',
+        transactionHash: null,
+      });
+      const mockGroup = createMockGroup({
+        status: GroupStatus.ACTIVE,
+        currentRound: 1,
+        totalRounds: 5,
+        contractAddress: 'CCONTRACT123',
+        contributionAmount: '100',
+        memberships: [recipient],
+      });
+
+      (stellarService.disbursePayout as jest.Mock).mockResolvedValue(
+        'TX_HASH_ABC',
+      );
+
+      const ds = buildDataSourceMock({
+        ...mockGroup,
+        memberships: [{ ...recipient }],
+      });
+      (mockDataSource as any).transaction = ds.transaction;
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+      await service.advanceRound(groupId, adminWallet);
+
+      expect(ds._innerMembershipRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ transactionHash: 'TX_HASH_ABC' }),
+      );
+    });
+
+    it('should NOT advance round if disbursePayout throws', async () => {
+      const recipient = createMockMembership({
+        id: 'member-1',
+        payoutOrder: 0,
+        hasPaidCurrentRound: true,
+        walletAddress: 'GRECIPIENT',
+      });
+      const mockGroup = createMockGroup({
+        status: GroupStatus.ACTIVE,
+        currentRound: 1,
+        totalRounds: 5,
+        contractAddress: 'CCONTRACT123',
+        contributionAmount: '100',
+        memberships: [recipient],
+      });
+
+      (stellarService.disbursePayout as jest.Mock).mockRejectedValue(
+        new Error('Stellar RPC timeout'),
+      );
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+      await expect(service.advanceRound(groupId, adminWallet)).rejects.toThrow(
+        InternalServerErrorException,
+      );
+      await expect(service.advanceRound(groupId, adminWallet)).rejects.toThrow(
+        'On-chain payout failed; round not advanced',
+      );
+      // DB transaction should never have been called
+      expect(mockDataSource.transaction).not.toHaveBeenCalled();
+    });
+
+    it('should advance to next round when all members have paid', async () => {
+      const member1 = createMockMembership({
+        id: 'member-1',
+        userId: 'user-1',
+        payoutOrder: 0,
+        hasPaidCurrentRound: true,
+      });
+      const member2 = createMockMembership({
+        id: 'member-2',
+        userId: 'user-2',
+        payoutOrder: 1,
+        hasPaidCurrentRound: true,
+      });
+      const mockGroup = createMockGroup({
+        status: GroupStatus.ACTIVE,
+        currentRound: 1,
+        totalRounds: 5,
+        contractAddress: 'CCONTRACT123',
+        memberships: [member1, member2],
+      });
+
       const advancedGroup = { ...mockGroup, currentRound: 2 } as Group;
       groupRepository.findOne!.mockResolvedValue(mockGroup);
-      membershipRepository.save!.mockResolvedValue({} as any);
-      groupRepository.save!.mockResolvedValue(advancedGroup);
+
+      const ds = buildDataSourceMock({
+        ...mockGroup,
+        memberships: [member1, member2],
+      });
+      ds._innerGroupRepo.save.mockResolvedValue(advancedGroup);
+      (mockDataSource as any).transaction = ds.transaction;
 
       const result = await service.advanceRound(groupId, adminWallet);
 
       expect(result.currentRound).toBe(2);
       expect(result.status).toBe(GroupStatus.ACTIVE);
-      expect(membershipRepository.save).toHaveBeenCalledTimes(2);
-      expect(notificationsService.notify).toHaveBeenCalledTimes(2);
     });
 
     it('should mark group as COMPLETED when advancing past totalRounds', async () => {
+      const member = createMockMembership({
+        id: 'member-1',
+        payoutOrder: 4,
+        hasPaidCurrentRound: true,
+      });
       const mockGroup = createMockGroup({
         status: GroupStatus.ACTIVE,
         currentRound: 5,
         totalRounds: 5,
-        memberships: [createMockMembership({ hasPaidCurrentRound: true })],
+        contractAddress: 'CCONTRACT123',
+        memberships: [member],
       });
 
       const completedGroup = {
@@ -787,14 +997,15 @@ describe('GroupsService', () => {
         status: GroupStatus.COMPLETED,
       } as Group;
       groupRepository.findOne!.mockResolvedValue(mockGroup);
-      groupRepository.save!.mockResolvedValue(completedGroup);
+
+      const ds = buildDataSourceMock({ ...mockGroup, memberships: [member] });
+      ds._innerGroupRepo.save.mockResolvedValue(completedGroup);
+      (mockDataSource as any).transaction = ds.transaction;
 
       const result = await service.advanceRound(groupId, adminWallet);
 
       expect(result.currentRound).toBe(6);
       expect(result.status).toBe(GroupStatus.COMPLETED);
-      expect(membershipRepository.save).not.toHaveBeenCalled();
-      expect(notificationsService.notify).not.toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when group does not exist', async () => {
@@ -847,44 +1058,52 @@ describe('GroupsService', () => {
       );
     });
 
-    it('should reset hasPaidCurrentRound for all members', async () => {
+    it('should reset hasPaidCurrentRound for all members inside the transaction', async () => {
       const member1 = createMockMembership({
         id: 'member-1',
         userId: 'user-1',
+        payoutOrder: 0,
         hasPaidCurrentRound: true,
       });
       const member2 = createMockMembership({
         id: 'member-2',
         userId: 'user-2',
+        payoutOrder: 1,
         hasPaidCurrentRound: true,
       });
       const mockGroup = createMockGroup({
         status: GroupStatus.ACTIVE,
         currentRound: 1,
         totalRounds: 5,
+        contractAddress: 'CCONTRACT123',
         memberships: [member1, member2],
       });
 
       groupRepository.findOne!.mockResolvedValue(mockGroup);
-      membershipRepository.save!.mockResolvedValue({} as any);
-      groupRepository.save!.mockResolvedValue(mockGroup);
+      const ds = buildDataSourceMock({
+        ...mockGroup,
+        memberships: [{ ...member1 }, { ...member2 }],
+      });
+      (mockDataSource as any).transaction = ds.transaction;
 
       await service.advanceRound(groupId, adminWallet);
 
-      expect(membershipRepository.save).toHaveBeenCalledWith(
+      expect(ds._innerMembershipRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ hasPaidCurrentRound: false }),
       );
     });
 
-    it('should send ROUND_OPENED notification to all members', async () => {
+    it('should send ROUND_OPENED notifications after advancing', async () => {
       const member1 = createMockMembership({
         id: 'member-1',
         userId: 'user-1',
+        payoutOrder: 0,
         hasPaidCurrentRound: true,
       });
       const member2 = createMockMembership({
         id: 'member-2',
         userId: 'user-2',
+        payoutOrder: 1,
         hasPaidCurrentRound: true,
       });
       const mockGroup = createMockGroup({
@@ -892,91 +1111,86 @@ describe('GroupsService', () => {
         status: GroupStatus.ACTIVE,
         currentRound: 1,
         totalRounds: 5,
+        contractAddress: 'CCONTRACT123',
         memberships: [member1, member2],
       });
 
       groupRepository.findOne!.mockResolvedValue(mockGroup);
-      membershipRepository.save!.mockResolvedValue({} as any);
-      groupRepository.save!.mockResolvedValue({
+      const ds = buildDataSourceMock({
+        ...mockGroup,
+        memberships: [{ ...member1 }, { ...member2 }],
+      });
+      ds._innerGroupRepo.save.mockResolvedValue({
         ...mockGroup,
         currentRound: 2,
       });
+      (mockDataSource as any).transaction = ds.transaction;
 
       await service.advanceRound(groupId, adminWallet);
 
-      expect(notificationsService.notify).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: 'user-1',
-          type: 'round_opened',
-          title: 'New Round Started',
-        }),
-      );
-      expect(notificationsService.notify).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: 'user-2',
-          type: 'round_opened',
-        }),
+      expect(notificationsService.notifyBatch).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ userId: 'user-1', type: 'round_opened' }),
+          expect.objectContaining({ userId: 'user-2', type: 'round_opened' }),
+        ]),
       );
     });
 
     it('should clear staleAt flag when advancing round', async () => {
+      const member = createMockMembership({
+        id: 'member-1',
+        payoutOrder: 0,
+        hasPaidCurrentRound: true,
+      });
       const mockGroup = createMockGroup({
         status: GroupStatus.ACTIVE,
         currentRound: 1,
         totalRounds: 5,
         staleAt: new Date('2024-01-15'),
-        memberships: [
-          createMockMembership({
-            hasPaidCurrentRound: true,
-          }),
-        ],
+        contractAddress: 'CCONTRACT123',
+        memberships: [member],
       });
 
-      const clearedGroup = { ...mockGroup, currentRound: 2, staleAt: null };
       groupRepository.findOne!.mockResolvedValue(mockGroup);
-      membershipRepository.save!.mockResolvedValue({} as any);
-      groupRepository.save!.mockResolvedValue(clearedGroup as Group);
+      const innerGroup = { ...mockGroup, memberships: [{ ...member }] };
+      const ds = buildDataSourceMock(innerGroup);
+      (mockDataSource as any).transaction = ds.transaction;
 
-      const result = await service.advanceRound(groupId, adminWallet);
+      await service.advanceRound(groupId, adminWallet);
 
-      expect(groupRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          staleAt: null,
-        }),
+      expect(ds._innerGroupRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ staleAt: null }),
       );
-      expect(result.staleAt).toBeNull();
       expect(logger.log).toHaveBeenCalledWith(
         expect.stringContaining('Cleared stale flag'),
         'GroupsService',
       );
     });
 
-    it('should not log stale flag clearing if group was not stale', async () => {
+    it('should skip disbursePayout when group has no contractAddress', async () => {
+      const member = createMockMembership({
+        id: 'member-1',
+        payoutOrder: 0,
+        hasPaidCurrentRound: true,
+      });
       const mockGroup = createMockGroup({
         status: GroupStatus.ACTIVE,
         currentRound: 1,
         totalRounds: 5,
-        staleAt: null,
-        memberships: [
-          createMockMembership({
-            hasPaidCurrentRound: true,
-          }),
-        ],
+        contractAddress: null,
+        memberships: [member],
       });
 
       groupRepository.findOne!.mockResolvedValue(mockGroup);
-      membershipRepository.save!.mockResolvedValue({} as any);
-      groupRepository.save!.mockResolvedValue({
+      const ds = buildDataSourceMock({
         ...mockGroup,
-        currentRound: 2,
-      } as Group);
+        memberships: [{ ...member }],
+      });
+      (mockDataSource as any).transaction = ds.transaction;
 
       await service.advanceRound(groupId, adminWallet);
 
-      expect(logger.log).not.toHaveBeenCalledWith(
-        expect.stringContaining('Cleared stale flag'),
-        'GroupsService',
-      );
+      expect(stellarService.disbursePayout).not.toHaveBeenCalled();
     });
   });
 

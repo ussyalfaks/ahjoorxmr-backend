@@ -1,6 +1,8 @@
 import {
   Controller,
   Get,
+  Post,
+  Body,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -13,13 +15,9 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { QueueService, AllQueueStats } from './queue.service';
-
-// ---------------------------------------------------------------------------
-// Replace these with your actual guards / decorators
-// ---------------------------------------------------------------------------
-// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-// import { RolesGuard } from '../auth/guards/roles.guard';
-// import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../stellar-auth/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('Admin – Queue')
 @ApiBearerAuth()
@@ -40,7 +38,43 @@ export class QueueAdminController {
     description:
       'Queue statistics for all queues including the dead-letter queue',
   })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin role required',
+  })
   async getStats(): Promise<AllQueueStats> {
     return this.queueService.getStats();
+  }
+
+  @Get('dead-letter')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get dead letter queue jobs (admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Dead letter queue jobs retrieved successfully',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin role required',
+  })
+  async getDeadLetterJobs() {
+    return this.queueService.getDeadLetterJobs();
+  }
+
+  @Post('retry')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Retry a failed job from dead letter queue (admin only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Job retry initiated successfully',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin role required',
+  })
+  async retryJob(@Body() body: { jobId: string }) {
+    return this.queueService.retryDeadLetterJob(body.jobId);
   }
 }

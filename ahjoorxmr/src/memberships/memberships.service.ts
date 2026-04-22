@@ -10,6 +10,7 @@ import { Membership } from './entities/membership.entity';
 import { Group } from '../groups/entities/group.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
 import { CreateMembershipDto } from './dto/create-membership.dto';
+import { UpdatePayoutOrderDto } from './dto/update-payout-order.dto';
 import { MembershipStatus } from './entities/membership-status.enum';
 import { NotificationsService } from '../notification/notifications.service';
 import { NotificationType } from '../notification/notification-type.enum';
@@ -39,7 +40,7 @@ export class MembershipsService {
    * @throws BadRequestException if the group is already active
    * @private
    */
-  private async validateGroupNotActive(groupId: string): Promise<void> {
+  private async validateGroupNotActive(groupId: string): Promise<Group> {
     const group = await this.groupRepository.findOne({
       where: { id: groupId },
     });
@@ -58,17 +59,39 @@ export class MembershipsService {
         'Cannot modify memberships for an active group',
       );
     }
+
+    return group;
   }
 
   /**
    * Calculates the next available payout order position for a new member.
    * Returns 0 if this is the first member, otherwise returns max(payoutOrder) + 1.
+   * Returns null if the group uses RANDOM or ADMIN_DEFINED strategy.
    *
    * @param groupId - The UUID of the group
-   * @returns The next sequential payout order position
+   * @returns The next sequential payout order position or null
    * @private
    */
-  private async getNextPayoutOrder(groupId: string): Promise<number> {
+  private async getNextPayoutOrder(groupId: string): Promise<number | null> {
+    // Get the group to check its payout order strategy
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    // For RANDOM or ADMIN_DEFINED strategies, return null
+    // Payout order will be assigned at activation time
+    if (
+      group.payoutOrderStrategy === 'RANDOM' ||
+      group.payoutOrderStrategy === 'ADMIN_DEFINED'
+    ) {
+      return null;
+    }
+
+    // For SEQUENTIAL strategy, calculate next order
     const result = await this.membershipRepository
       .createQueryBuilder('membership')
       .select('MAX(membership.payoutOrder)', 'maxOrder')
@@ -103,7 +126,22 @@ export class MembershipsService {
 
     try {
       // Validate group exists and is not active
-      await this.validateGroupNotActive(groupId);
+      const group = await this.validateGroupNotActive(groupId);
+
+      // Enforce maxMembers cap
+      const memberCount = await this.membershipRepository.count({
+        where: { groupId },
+      });
+
+      if (memberCount >= group.maxMembers) {
+        this.logger.warn(
+          `Group ${groupId} is at capacity (${memberCount}/${group.maxMembers})`,
+          'MembershipsService',
+        );
+        throw new BadRequestException(
+          `Group has reached its maximum member capacity of ${group.maxMembers}`,
+        );
+      }
 
       // Check for duplicate membership
       const existingMembership = await this.membershipRepository.findOne({
@@ -118,7 +156,7 @@ export class MembershipsService {
         throw new ConflictException('User is already a member of this group');
       }
 
-      // Calculate next available payout order
+      // Calculate next available payout order (null for RANDOM/ADMIN_DEFINED)
       const payoutOrder = await this.getNextPayoutOrder(groupId);
 
       // Create membership with default values
@@ -126,7 +164,7 @@ export class MembershipsService {
         groupId,
         userId,
         walletAddress,
-        payoutOrder,
+        payoutOrder: payoutOrder as any, // Allow null for non-SEQUENTIAL strategies
         status: MembershipStatus.ACTIVE,
         hasReceivedPayout: false,
         hasPaidCurrentRound: false,
@@ -247,34 +285,40 @@ export class MembershipsService {
   }
 
   /**
-   * Lists all members of a ROSCA group.
-   * Returns all memberships for the specified group ordered by payout order.
-   * Returns an empty array if the group has no members or doesn't exist.
+   * Lists members of a ROSCA group with pagination.
+   * Returns memberships ordered by payout order.
    *
    * @param groupId - The UUID of the group to list members for
-   * @returns Array of Membership entities ordered by payoutOrder ascending
+   * @param page - Page number (1-indexed, default 1)
+   * @param limit - Items per page (default 20, max 100)
+   * @returns Paginated result with data, total, page, and limit
    */
-  async listMembers(groupId: string): Promise<Membership[]> {
+  async listMembers(
+    groupId: string,
+    page: number = 1,
+    limit: number = 20,
+  ): Promise<{ data: Membership[]; total: number; page: number; limit: number }> {
     this.logger.log(
-      `Listing members for group ${groupId}`,
+      `Listing members for group ${groupId} page=${page} limit=${limit}`,
       'MembershipsService',
     );
 
     try {
-      // Query all memberships for groupId ordered by payoutOrder ASC
-      const members = await this.membershipRepository.find({
+      const skip = (page - 1) * limit;
+      const [data, total] = await this.membershipRepository.findAndCount({
         where: { groupId },
         order: { payoutOrder: 'ASC' },
+        skip,
+        take: limit,
       });
 
       this.logger.log(
-        `Found ${members.length} members for group ${groupId}`,
+        `Found ${total} members for group ${groupId}; returning page ${page}`,
         'MembershipsService',
       );
 
-      return members;
+      return { data, total, page, limit };
     } catch (error) {
-      // Log and re-throw unexpected errors
       this.logger.error(
         `Failed to list members for group ${groupId}: ${error.message}`,
         error.stack,
@@ -390,8 +434,48 @@ export class MembershipsService {
   }
 
   /**
+   * Returns the membership scheduled to receive the payout for the current round.
+   * Uses 0-indexed payoutOrder matching group.currentRound - 1.
+   *
+   * @param groupId - The UUID of the group
+   * @returns The Membership entity for the current round's recipient
+   * @throws NotFoundException if group doesn't exist or no member is scheduled
+   * @throws BadRequestException if group is not ACTIVE
+   */
+  async getCurrentRecipient(groupId: string): Promise<Membership> {
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    if (group.status !== GroupStatus.ACTIVE) {
+      throw new BadRequestException(
+        'Group must be ACTIVE to query current recipient',
+      );
+    }
+
+    const expectedPayoutOrder = group.currentRound - 1;
+
+    const membership = await this.membershipRepository.findOne({
+      where: { groupId, payoutOrder: expectedPayoutOrder },
+    });
+
+    if (!membership) {
+      throw new NotFoundException(
+        `No member scheduled for payout in round ${group.currentRound}`,
+      );
+    }
+
+    return membership;
+  }
+
+  /**
    * Records a payout to a member.
-   * Validates group is ACTIVE, member exists and hasn't received payout yet.
+   * Validates group is ACTIVE, enforces sequential round-based payout order,
+   * member exists and hasn't received payout yet.
    * Marks member as paid and stores transaction hash.
    *
    * @param groupId - The UUID of the group
@@ -399,7 +483,7 @@ export class MembershipsService {
    * @param transactionHash - The blockchain transaction hash
    * @returns The updated Membership entity
    * @throws NotFoundException if group or membership doesn't exist
-   * @throws BadRequestException if group is not ACTIVE
+   * @throws BadRequestException if group is not ACTIVE or payout order is wrong
    * @throws ConflictException if member already received payout
    */
   async recordPayout(
@@ -434,6 +518,14 @@ export class MembershipsService {
 
     if (membership.hasReceivedPayout) {
       throw new ConflictException('Member has already received payout');
+    }
+
+    // Enforce sequential round-based payout: payoutOrder must match currentRound - 1 (0-indexed)
+    const expectedPayoutOrder = group.currentRound - 1;
+    if (membership.payoutOrder !== expectedPayoutOrder) {
+      throw new BadRequestException(
+        `Payout order mismatch: member has payoutOrder ${membership.payoutOrder} but current round ${group.currentRound} expects payoutOrder ${expectedPayoutOrder}`,
+      );
     }
 
     membership.hasReceivedPayout = true;

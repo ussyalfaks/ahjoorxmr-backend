@@ -26,120 +26,38 @@ export class RedisService implements OnModuleDestroy {
         return delay;
       },
     });
-    this.redis.on('connect', () => {
-      this.logger.log(`Connected to Redis at ${host}:${port}`);
-    });
-
-    this.redis.on('error', (err) => {
-      this.logger.error(`Redis connection error: ${err.message}`);
-    });
-  }
-
-  async onModuleDestroy() {
-    await this.redis.quit();
-  }
-
-  /**
-   * Get a value from Redis by key
-   * @param key - The Redis key
-   * @returns The stored value or null if not found
-   */
-  async get(key: string): Promise<string | null> {
-    try {
-      return await this.redis.get(key);
-    } catch (error) {
-      this.logger.error(`Error getting key ${key}: ${error}`);
-      return null;
-    }
-  }
-
-  /**
-   * Set a value in Redis
-   * @param key - The Redis key
-   * @param value - The value to store
-   * @returns 'OK' if successful
-   */
-  async set(key: string, value: string): Promise<'OK' | null> {
-    try {
-      return await this.redis.set(key, value);
-    } catch (error) {
-      this.logger.error(`Error setting key ${key}: ${error}`);
-      return null;
-    }
-  }
-
-  /**
-   * Set a value in Redis with expiration time
-   * @param key - The Redis key
-   * @param value - The value to store
-   * @param ttlSeconds - Time to live in seconds
-   * @returns 'OK' if successful
-   */
-  async setWithExpiry(
-    key: string,
-    value: string,
-    ttlSeconds: number,
-  ): Promise<'OK' | null> {
-    try {
-      return await this.redis.set(key, value, 'EX', ttlSeconds);
-    } catch (error) {
-      this.logger.error(`Error setting key ${key} with expiry: ${error}`);
-      return null;
-    }
-  }
-
-  /**
-   * Delete a key from Redis
-   * @param key - The Redis key to delete
-   * @returns Number of keys deleted
-   */
-  async del(key: string): Promise<number> {
-    try {
-      return await this.redis.del(key);
-    } catch (error) {
-      this.logger.error(`Error deleting key ${key}: ${error}`);
-      return 0;
-    }
-  }
-
-  /**
-   * Check if a key exists in Redis
-   * @param key - The Redis key
-   * @returns 1 if exists, 0 otherwise
-   */
-  async exists(key: string): Promise<boolean> {
-    try {
-      const result = await this.redis.exists(key);
-      return result === 1;
-    } catch (error) {
-      this.logger.error(`Error checking key ${key}: ${error}`);
-      return false;
-    }
-  }
-
-  /**
-   * Get the underlying Redis client for advanced operations
-   */
-  getClient(): Redis {
-    return this.redis;
 
     this.client.on('connect', () => {
       this.logger.log(`Connected to Redis at ${host}:${port}`);
     });
 
     this.client.on('error', (err) => {
-      this.logger.error('Redis connection error:', err);
+      this.logger.error(`Redis connection error: ${err.message}`);
     });
+  }
+
+  getClient(): Redis {
+    return this.client;
   }
 
   /**
    * Get a value from Redis by key.
    */
   async get<T = string>(key: string): Promise<T | null> {
-    const value = await this.client.get(key);
+    let value: string | null = null;
+    try {
+      value = await this.client.get(key);
+    } catch (error) {
+      this.logger.error(
+        `Error getting key ${key}: ${(error as Error).message}`,
+      );
+      return null;
+    }
+
     if (value === null) {
       return null;
     }
+
     try {
       return JSON.parse(value) as T;
     } catch {
@@ -153,10 +71,16 @@ export class RedisService implements OnModuleDestroy {
   async set(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
     const serialized =
       typeof value === 'string' ? value : JSON.stringify(value);
-    if (ttlSeconds) {
-      await this.client.set(key, serialized, 'EX', ttlSeconds);
-    } else {
-      await this.client.set(key, serialized);
+    try {
+      if (ttlSeconds) {
+        await this.client.set(key, serialized, 'EX', ttlSeconds);
+      } else {
+        await this.client.set(key, serialized);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error setting key ${key}: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -171,15 +95,47 @@ export class RedisService implements OnModuleDestroy {
   ): Promise<void> {
     const serialized =
       typeof value === 'string' ? value : JSON.stringify(value);
-    await this.client.set(key, serialized, 'EX', ttlSeconds);
-    this.logger.debug(`Set key ${key} with TTL ${ttlSeconds}s`);
+    try {
+      await this.client.set(key, serialized, 'EX', ttlSeconds);
+      this.logger.debug(`Set key ${key} with TTL ${ttlSeconds}s`);
+    } catch (error) {
+      this.logger.error(
+        `Error setting key ${key} with expiry: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Set a lock key only when absent, with expiry.
+   */
+  async setIfNotExistsWithExpiry(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): Promise<boolean> {
+    try {
+      const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
+      return result === 'OK';
+    } catch (error) {
+      this.logger.error(
+        `Error setting NX key ${key}: ${(error as Error).message}`,
+      );
+      return false;
+    }
   }
 
   /**
    * Delete a key from Redis.
    */
   async del(key: string): Promise<number> {
-    return await this.client.del(key);
+    try {
+      return await this.client.del(key);
+    } catch (error) {
+      this.logger.error(
+        `Error deleting key ${key}: ${(error as Error).message}`,
+      );
+      return 0;
+    }
   }
 
   /**
@@ -218,22 +174,71 @@ export class RedisService implements OnModuleDestroy {
    * Check if a key exists in Redis.
    */
   async exists(key: string): Promise<boolean> {
-    const result = await this.client.exists(key);
-    return result === 1;
+    try {
+      const result = await this.client.exists(key);
+      return result === 1;
+    } catch (error) {
+      this.logger.error(
+        `Error checking key ${key}: ${(error as Error).message}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Add one or more members to a set.
+   */
+  async sadd(key: string, ...members: string[]): Promise<number> {
+    try {
+      return await this.client.sadd(key, ...members);
+    } catch (error) {
+      this.logger.error(
+        `Error adding set members for key ${key}: ${(error as Error).message}`,
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Check set membership.
+   */
+  async sismember(key: string, member: string): Promise<boolean> {
+    try {
+      return (await this.client.sismember(key, member)) === 1;
+    } catch (error) {
+      this.logger.error(
+        `Error checking set membership for key ${key}: ${(error as Error).message}`,
+      );
+      return false;
+    }
   }
 
   /**
    * Set expiration time on an existing key.
    */
   async expire(key: string, ttlSeconds: number): Promise<boolean> {
-    return (await this.client.expire(key, ttlSeconds)) === 1;
+    try {
+      return (await this.client.expire(key, ttlSeconds)) === 1;
+    } catch (error) {
+      this.logger.error(
+        `Error setting expiry for key ${key}: ${(error as Error).message}`,
+      );
+      return false;
+    }
   }
 
   /**
    * Get the remaining time-to-live (TTL) of a key.
    */
   async ttl(key: string): Promise<number> {
-    return await this.client.ttl(key);
+    try {
+      return await this.client.ttl(key);
+    } catch (error) {
+      this.logger.error(
+        `Error reading TTL for key ${key}: ${(error as Error).message}`,
+      );
+      return -2;
+    }
   }
 
   async onModuleDestroy(): Promise<void> {

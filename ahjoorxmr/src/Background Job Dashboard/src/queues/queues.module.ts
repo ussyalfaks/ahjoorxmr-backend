@@ -5,6 +5,7 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { EmailProcessor } from './email.processor';
 import { NotificationsProcessor } from './notifications.processor';
 import { PaymentsProcessor } from './payments.processor';
+import { QUEUE_NAMES } from '../../../../bullmq/queue.constants';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PaymentsProcessor } from './payments.processor';
       { name: 'email' },
       { name: 'notifications' },
       { name: 'payments' },
+      { name: QUEUE_NAMES.PAYOUT_RECONCILIATION },
     ),
     // Register queues with Bull Board
     BullBoardModule.forFeature(
@@ -32,6 +34,10 @@ import { PaymentsProcessor } from './payments.processor';
       },
       {
         name: 'payments',
+        adapter: BullMQAdapter,
+      },
+      {
+        name: QUEUE_NAMES.PAYOUT_RECONCILIATION,
         adapter: BullMQAdapter,
       },
     ),

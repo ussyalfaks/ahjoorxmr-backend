@@ -69,3 +69,21 @@ export class MembershipResponseDto {
   })
   updatedAt: string;
 }
+
+/**
+ * Paginated response DTO for membership list endpoints.
+ */
+export class PaginatedMembershipsResponseDto {
+  @ApiProperty({ type: [MembershipResponseDto] })
+  data: MembershipResponseDto[];
+
+  @ApiProperty({ example: 100 })
+  total: number;
+
+  @ApiProperty({ example: 1 })
+  page: number;
+
+  @ApiProperty({ example: 20 })
+  limit: number;
+}
+

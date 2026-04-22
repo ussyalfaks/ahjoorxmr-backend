@@ -30,8 +30,8 @@ export class Membership extends BaseEntity {
   @Column('varchar', { length: 255 })
   walletAddress: string;
 
-  @Column('int')
-  payoutOrder: number;
+  @Column('int', { nullable: true })
+  payoutOrder: number | null;
 
   @Column('boolean', { default: false })
   hasReceivedPayout: boolean;

@@ -6,6 +6,8 @@ import {
   Min,
   MinLength,
   Matches,
+  IsTimeZone,
+  IsDateString,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -71,6 +73,26 @@ export class CreateGroupDto {
   @Min(1)
   totalRounds: number;
 
+  @ApiProperty({
+    description: 'Minimum number of members required to activate the group',
+    example: 3,
+    minimum: 1,
+  })
+  @IsInt()
+  @Min(1)
+  minMembers: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Maximum number of members allowed (must equal totalRounds; defaults to totalRounds)',
+    example: 12,
+    minimum: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxMembers?: number;
+
   @ApiPropertyOptional({
     description:
       'On-chain contract address (optional at creation time, assigned after deployment)',
@@ -79,4 +101,28 @@ export class CreateGroupDto {
   @IsOptional()
   @IsString()
   contractAddress?: string;
+
+  @ApiPropertyOptional({
+    description: 'IANA timezone for the contribution window (e.g. America/New_York, UTC)',
+    example: 'America/New_York',
+  })
+  @IsOptional()
+  @IsTimeZone()
+  timezone?: string;
+
+  @ApiPropertyOptional({
+    description: 'Contribution window start date (ISO 8601 with timezone offset)',
+    example: '2024-01-01T00:00:00Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Contribution window end date (ISO 8601 with timezone offset)',
+    example: '2024-12-31T23:59:59Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
 }

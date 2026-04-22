@@ -6,6 +6,7 @@ import { RedisThrottlerStorageService } from './redis-throttler-storage.service'
 import { getThrottlerConfig } from './throttler.config';
 import { TrustedIpService } from './services/trusted-ip.service';
 import { CustomThrottlerGuard } from './guards/custom-throttler.guard';
+import { WalletThrottlerGuard } from './guards/wallet-throttler.guard';
 import { RateLimitAdminController } from './controllers/rate-limit-admin.controller';
 import { RateLimitExampleController } from './controllers/rate-limit-example.controller';
 
@@ -28,6 +29,7 @@ import { RateLimitExampleController } from './controllers/rate-limit-example.con
   ],
   controllers: [RateLimitAdminController, RateLimitExampleController],
   providers: [
+    WalletThrottlerGuard,
     RedisThrottlerStorageService,
     TrustedIpService,
     {
@@ -35,6 +37,11 @@ import { RateLimitExampleController } from './controllers/rate-limit-example.con
       useClass: CustomThrottlerGuard,
     },
   ],
-  exports: [ThrottlerModule, RedisThrottlerStorageService, TrustedIpService],
+  exports: [
+    ThrottlerModule,
+    RedisThrottlerStorageService,
+    TrustedIpService,
+    WalletThrottlerGuard,
+  ],
 })
 export class CustomThrottlerModule {}

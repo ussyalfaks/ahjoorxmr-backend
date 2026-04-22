@@ -1,6 +1,15 @@
 import { Entity, Column, OneToMany, Index } from 'typeorm';
+import { Exclude, Expose } from 'class-transformer';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { Membership } from '../../memberships/entities/membership.entity';
+import { KycStatus } from '../../kyc/entities/kyc-status.enum';
+import { KycDocument } from '../../kyc/entities/kyc-document.entity';
+
+export enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user',
+  MODERATOR = 'moderator',
+}
 
 /**
  * User entity representing a user in the system.
@@ -21,6 +30,7 @@ export class User extends BaseEntity {
   @Column({ type: 'varchar', length: 255, nullable: true })
   username?: string | null;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 255, nullable: true })
   password?: string | null;
 
@@ -31,19 +41,23 @@ export class User extends BaseEntity {
   })
   role: 'admin' | 'user' | 'guest';
 
+  @Exclude()
   @Column({ type: 'varchar', length: 255, nullable: true })
   refreshTokenHash?: string | null;
 
+  @Exclude()
   @Column({ type: 'integer', default: 0 })
   tokenVersion: number;
 
   // Two-Factor Authentication
+  @Exclude()
   @Column({ type: 'varchar', length: 255, nullable: true })
   twoFactorSecret?: string | null;
 
   @Column({ type: 'boolean', default: false })
   twoFactorEnabled: boolean;
 
+  @Exclude()
   @Column({ type: 'text', array: true, nullable: true })
   backupCodes?: string[] | null;
 
@@ -102,11 +116,23 @@ export class User extends BaseEntity {
   @Column({ type: 'jsonb', nullable: true })
   metadata?: Record<string, any> | null;
 
+  // KYC
+  @Column({
+    type: 'enum',
+    enum: KycStatus,
+    nullable: true,
+    default: null,
+  })
+  kycStatus?: KycStatus | null;
+
   // Relationships
   @OneToMany(() => Membership, (membership) => membership.user, {
     cascade: true,
   })
   memberships?: Membership[];
+
+  @OneToMany(() => KycDocument, (doc) => doc.user)
+  kycDocuments?: KycDocument[];
 
   // Virtual fields (not stored in database)
   get fullName(): string {

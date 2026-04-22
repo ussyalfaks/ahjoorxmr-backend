@@ -17,6 +17,7 @@ import {
   ParseBoolPipe,
   Version,
   SetMetadata,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,9 +27,10 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
-  ApiDeprecatedResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { GroupsService } from './groups.service';
+import { PayoutService } from './payout.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import {
@@ -36,11 +38,13 @@ import {
   PaginatedGroupsResponseDto,
 } from './dto/group-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { WalletThrottlerGuard } from '../throttler/guards/wallet-throttler.guard';
 import { Group } from './entities/group.entity';
 import { Membership } from '../memberships/entities/membership.entity';
 import { MembershipResponseDto } from '../memberships/dto/membership-response.dto';
 import { AuditLog } from '../audit/decorators/audit-log.decorator';
 import { ErrorResponseDto } from '../common/dto/error-response.dto';
+import { PaginationQueryDto } from './dto/pagination-query.dto';
 
 /**
  * Controller for managing ROSCA groups.
@@ -56,10 +60,12 @@ import { ErrorResponseDto } from '../common/dto/error-response.dto';
  */
 @ApiTags('Groups')
 @Controller('groups')
-@Version('1')
 @SetMetadata('deprecated', true)
 export class GroupsController {
-  constructor(private readonly groupsService: GroupsService) {}
+  constructor(
+    private readonly groupsService: GroupsService,
+    private readonly payoutService: PayoutService,
+  ) {}
 
   /**
    * Creates a new ROSCA group with status PENDING.
@@ -121,20 +127,8 @@ export class GroupsController {
     summary: 'Get all ROSCA groups with pagination',
     description: 'Returns a paginated list of all ROSCA groups',
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Page number',
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Items per page',
-    example: 10,
-  })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 20, max: 100)', example: 20 })
   @ApiQuery({
     name: 'includeArchived',
     required: false,
@@ -154,13 +148,14 @@ export class GroupsController {
     description: 'Successfully retrieved groups',
     type: PaginatedGroupsResponseDto,
   })
+  @ApiResponse({ status: 400, description: 'Invalid pagination params', type: ErrorResponseDto })
   async findAll(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query() pagination: PaginationQueryDto,
     @Query('includeArchived', new DefaultValuePipe(false), ParseBoolPipe)
     includeArchived: boolean,
     @Query('filter') filter?: string,
   ): Promise<PaginatedGroupsResponseDto> {
+    const { page = 1, limit = 20 } = pagination;
     const result = await this.groupsService.findAll(
       page,
       limit,
@@ -356,7 +351,8 @@ export class GroupsController {
    * @throws BadRequestException if the group is not PENDING or doesn't have enough members
    */
   @Post(':id/activate')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, WalletThrottlerGuard)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -422,6 +418,71 @@ export class GroupsController {
     const adminWallet = req.user.walletAddress || req.user.id;
     const group = await this.groupsService.advanceRound(id, adminWallet);
     return this.toGroupResponse(group);
+  }
+
+  /**
+   * Manually triggers a payout for a specific group and round.
+   * Admin-only override endpoint.
+   *
+   * @param req - Authenticated request object
+   * @param id - The UUID of the group
+   * @param round - The round number to trigger payout for
+   * @returns The transaction hash of the payout
+   */
+  @Post(':id/rounds/:round/payout')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Manually trigger payout',
+    description:
+      'Manually triggers a payout for a specific group and round. Admin-only override.',
+  })
+  @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
+  @ApiParam({ name: 'round', description: 'Round number', type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'Payout triggered successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input or group not ACTIVE',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - only group admin can trigger payout',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group or recipient not found',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 502,
+    description: 'Contract invocation failed',
+    type: ErrorResponseDto,
+  })
+  @AuditLog({ action: 'TRIGGER_PAYOUT', resource: 'GROUP' })
+  async triggerManualPayout(
+    @Request() req: { user: { id: string; walletAddress: string } },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('round', ParseIntPipe) round: number,
+  ): Promise<{ transactionHash: string }> {
+    const adminWallet = req.user.walletAddress || req.user.id;
+    const group = await this.groupsService.findOne(id);
+
+    if (group.adminWallet !== adminWallet) {
+      throw new ForbiddenException('Only the group admin can trigger payouts');
+    }
+
+    const txHash = await this.payoutService.distributePayout(id, round);
+    return { transactionHash: txHash };
   }
 
   /**

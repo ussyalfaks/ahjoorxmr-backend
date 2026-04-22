@@ -1,4 +1,12 @@
-import { Controller, Get, Query, UseGuards, Version } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  SerializeOptions,
+  UseGuards,
+  Version,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import {
   ApiTags,
@@ -15,11 +23,14 @@ import {
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UsersService } from './users.service';
+import { UserResponseDto } from './dto/user-response.dto';
 
 @ApiTags('Users')
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
   @Get()
   @Version('1')
   @Roles('admin')
@@ -126,5 +137,26 @@ export class UsersController {
       limit: query.limit || 10,
       totalPages: Math.ceil(100 / (query.limit || 10)),
     };
+  }
+
+  @Get(':id')
+  @Version('1')
+  @SerializeOptions({ type: UserResponseDto })
+  @ApiOperation({
+    summary: 'Get user profile by ID',
+    description: 'Returns safe public fields for the requested user profile.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile retrieved successfully',
+    type: UserResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async findOne(@Param('id') id: string): Promise<UserResponseDto> {
+    const user = await this.usersService.findById(id);
+    return new UserResponseDto(user);
   }
 }

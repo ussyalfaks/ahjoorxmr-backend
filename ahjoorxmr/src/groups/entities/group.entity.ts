@@ -43,8 +43,20 @@ export class Group extends BaseEntity {
   @Column('int')
   minMembers: number;
 
+  @Column('int')
+  maxMembers: number;
+
   @Column({ type: 'timestamp', nullable: true, default: null })
   staleAt: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  startDate: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true, default: null })
+  endDate: Date | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true, default: 'UTC' })
+  timezone: string | null;
 
   @DeleteDateColumn({ nullable: true })
   deletedAt: Date | null;

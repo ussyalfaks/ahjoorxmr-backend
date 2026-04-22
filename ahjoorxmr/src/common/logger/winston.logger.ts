@@ -1,5 +1,8 @@
 import { Injectable, LoggerService } from '@nestjs/common';
 import * as winston from 'winston';
+import { trace } from '@opentelemetry/api';
+import { getCorrelationId } from '../context/async-context';
+import { deepScrubForLog } from '../pii/pii-scrubber';
 
 @Injectable()
 export class WinstonLogger implements LoggerService {
@@ -11,6 +14,24 @@ export class WinstonLogger implements LoggerService {
       format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.errors({ stack: true }),
+        winston.format((info) => {
+          const correlationId = getCorrelationId();
+          if (correlationId) {
+            info.correlationId = correlationId;
+          }
+
+          const span = trace.getActiveSpan();
+          if (span) {
+            const spanContext = span.spanContext();
+            info.traceId = spanContext.traceId;
+            info.spanId = spanContext.spanId;
+          }
+
+          const scrubbed = deepScrubForLog(info) as winston.Logform.TransformableInfo;
+          Object.assign(info, scrubbed);
+
+          return info;
+        })(),
         winston.format.json(),
       ),
       transports: [

@@ -1,0 +1,91 @@
+commit b09a0878ec7d51ecf426aa1cbaa972e4a98294c1
+Author: Alex PC <benalex8797@gmail.com>
+Date:   Sat Mar 28 15:33:49 2026 +0100
+
+    fix(kyc): prevent PII exposure in audit logs and Winston output (#164)
+    
+    - Add @Sensitive() property decorator to mark PII fields on DTOs
+    - Implement scrubForLog() utility: replaces sensitive values with [REDACTED]
+    - Implement scrubForAudit() utility: replaces sensitive values with HMAC-SHA256
+      hashes keyed by PII_HMAC_SECRET (GDPR Art. 32 compliant)
+    - Add PiiScrubbingInterceptor registered globally in AppModule as first
+      interceptor; attaches scrubbed body to req.__scrubbedBody for downstream use
+    - Update AuditLogInterceptor to use scrubForAudit() before persisting
+      requestPayload — raw PII is never written to audit_logs table
+    - Update kyc.service.ts log calls to pass payloads through scrubForLog()
+    - Add KycSubmissionDto with @Sensitive() on fullName, nationalId, dob,
+      address, phone
+    - Add PII_HMAC_SECRET to .env.example with documentation
+    - Add 14-test Jest compliance suite (kyc.pii-compliance.spec.ts) — all pass
+    - Document policy in src/auth/RBAC_IMPLEMENTATION.md
+    
+    Closes #164
+
+commit 6acb3fef19aef1f4408ddaaf0f48e26137fbc4c3
+Author: Alex PC <benalex8797@gmail.com>
+Date:   Sat Mar 28 15:20:38 2026 +0100
+
+    fix scheduler
+
+commit c270ed75d536fa8dadc33d97310ce58ba2504498
+Merge: 7afca8b 81256ff
+Author: Usman Alfaki <82191216+ussyalfaks@users.noreply.github.com>
+Date:   Sat Mar 28 11:03:06 2026 +0100
+
+    Merge pull request #167 from Treasure332/User-Profile
+    
+    feat: User Profile Endpoint Returns Sensitive Fields
+
+commit 7afca8b4a9fcbd2a14bc5e2d698d86316e3408fe
+Merge: c173e04 93e0882
+Author: Usman Alfaki <82191216+ussyalfaks@users.noreply.github.com>
+Date:   Sat Mar 28 11:02:35 2026 +0100
+
+    Merge pull request #166 from Treasure332/race
+    
+    feat: Race Condition in Double-Contribution Guard
+
+commit 81256ff727d3b945aec0bcb6ef3a1693b4704f0f
+Author: Treasure332 <treasureandcryptohunt@gmail.com>
+Date:   Sat Mar 28 08:52:24 2026 +0100
+
+    feat: User Profile Endpoint Returns Sensitive Fields
+
+commit 93e08821bc7bd278b18ef0452b4798576031358e
+Author: Treasure332 <treasureandcryptohunt@gmail.com>
+Date:   Sat Mar 28 08:20:11 2026 +0100
+
+    feat: Race Condition in Double-Contribution Guard
+
+commit c173e049f2b8501c8d259cffbf55e38d8d56468d
+Merge: 459a562 14cc5c3
+Author: Usman Alfaki <82191216+ussyalfaks@users.noreply.github.com>
+Date:   Fri Mar 27 23:39:45 2026 +0100
+
+    Merge pull request #160 from KingFRANKHOOD/main
+    
+    Implement auth replay protection, mediation locking, scheduler backpr…
+
+commit 14cc5c3a3860c0ec4a8c5719f4bb291621300df2
+Author: KingFRANKHOOD <chibuezemfrancis@gmail.com>
+Date:   Fri Mar 27 23:24:56 2026 +0100
+
+    Implement auth replay protection, mediation locking, scheduler backpressure, and payout idempotency
+
+commit 459a562412a4215e5b420e5f2018529578e7a8a0
+Merge: 66139f5 7026d87
+Author: Usman Alfaki <82191216+ussyalfaks@users.noreply.github.com>
+Date:   Fri Mar 27 21:08:05 2026 +0100
+
+    Merge pull request #159 from Eniola3321/stellar-wallet-Auth
+    
+    feat(Auth): Stellar Wallet-Based Authentication (Challenge-Response)
+
+commit 66139f55506c1873680424491de9850a9c532eeb
+Merge: 5357b2f eb5571d
+Author: Usman Alfaki <82191216+ussyalfaks@users.noreply.github.com>
+Date:   Fri Mar 27 21:05:00 2026 +0100
+
+    Merge pull request #147 from Emmzyemms/payout
+    
+    feat/Payout Distribution Logic Is Not Implemented

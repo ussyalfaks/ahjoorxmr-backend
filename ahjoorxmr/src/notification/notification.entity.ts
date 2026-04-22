@@ -9,6 +9,10 @@ import { NotificationType } from './notification-type.enum';
 
 @Entity('notifications')
 @Index(['userId', 'createdAt'])
+@Index('IDX_notifications_idempotencyKey', ['idempotencyKey'], {
+  unique: true,
+  where: '"idempotencyKey" IS NOT NULL',
+})
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -31,6 +35,9 @@ export class Notification {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  idempotencyKey: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

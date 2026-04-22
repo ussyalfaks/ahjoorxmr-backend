@@ -1,16 +1,28 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { HealthCheck, HealthCheckService } from '@nestjs/terminus';
 import { HealthService } from './health.service';
+import { StellarHealthIndicator } from './stellar-health.indicator';
 import {
   HealthResponseDto,
   ReadinessResponseDto,
 } from './dto/health-response.dto';
 import { InternalServerErrorResponseDto } from '../common/dto/error-response.dto';
 
+/**
+ * Health check endpoints use a lenient throttle (300 req/min) so monitoring
+ * tools are never locked out by the global per-user rate limit.
+ */
 @ApiTags('Health')
 @Controller('health')
+@Throttle({ default: { limit: 300, ttl: 60000 } })
 export class HealthController {
-  constructor(private readonly healthService: HealthService) {}
+  constructor(
+    private readonly healthService: HealthService,
+    private readonly health: HealthCheckService,
+    private readonly stellarHealth: StellarHealthIndicator,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -64,5 +76,17 @@ export class HealthController {
   })
   async getDatabaseHealth() {
     return this.healthService.getDatabaseHealth();
+  }
+
+  @Get('stellar')
+  @HealthCheck()
+  @ApiOperation({
+    summary: 'Get Stellar network health status',
+    description: 'Pings Horizon API and Soroban RPC to verify Stellar connectivity',
+  })
+  @ApiResponse({ status: 200, description: 'Stellar network is healthy' })
+  @ApiResponse({ status: 503, description: 'Stellar network is unhealthy' })
+  async getStellarHealth() {
+    return this.health.check([() => this.stellarHealth.isHealthy('stellar')]);
   }
 }

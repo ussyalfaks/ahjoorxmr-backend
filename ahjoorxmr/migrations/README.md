@@ -57,6 +57,24 @@ The `InitialSchema` migration creates the base tables:
 - `groups` - ROSCA groups
 - `memberships` - User memberships in groups with status tracking
 
+## Recent Migrations
+
+### AddPayoutOrderStrategy (1740150000000)
+
+Adds support for different payout order strategies in ROSCA groups:
+
+**Changes:**
+- Adds `payoutOrderStrategy` column to `groups` table (SEQUENTIAL, RANDOM, ADMIN_DEFINED)
+- Modifies `payoutOrder` column in `memberships` table to allow NULL values
+- Preserves all existing data with backward compatibility
+
+**Impact:**
+- Existing groups default to SEQUENTIAL strategy
+- Existing memberships retain their payout orders
+- New groups can choose from three strategies
+
+See `PAYOUT_ORDER_STRATEGIES.md` for detailed documentation.
+
 ## Troubleshooting
 
 **Migration fails to run:**

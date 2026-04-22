@@ -69,7 +69,7 @@ export class AuditService {
       where: whereConditions,
       order: { timestamp: 'DESC' },
       skip,
-      take: limit,
+      take: limit, // always apply LIMIT so idx_audit_user_created is exercised
     });
 
     return {

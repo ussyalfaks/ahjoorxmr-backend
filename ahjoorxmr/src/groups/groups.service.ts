@@ -3,9 +3,10 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  InternalServerErrorException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Group } from './entities/group.entity';
 import { Membership } from '../memberships/entities/membership.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
@@ -31,6 +32,8 @@ export class GroupsService {
     private readonly logger: WinstonLogger,
     private readonly notificationsService: NotificationsService,
     private readonly stellarService: StellarService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -51,8 +54,22 @@ export class GroupsService {
     );
 
     try {
+      const maxMembers =
+        createGroupDto.maxMembers ?? createGroupDto.totalRounds;
+
+      if (maxMembers !== createGroupDto.totalRounds) {
+        throw new BadRequestException('maxMembers must equal totalRounds');
+      }
+
+      if (createGroupDto.minMembers > maxMembers) {
+        throw new BadRequestException(
+          'minMembers must be less than or equal to maxMembers',
+        );
+      }
+
       const group = this.groupRepository.create({
         ...createGroupDto,
+        maxMembers,
         adminWallet,
         status: GroupStatus.PENDING,
         currentRound: 0,
@@ -434,6 +451,14 @@ export class GroupsService {
    * Advances the group to the next round.
    * Only the group admin can advance a round.
    * All members must have paid their current round contribution.
+   *
+   * Before incrementing currentRound, the on-chain payout is sent to the
+   * recipient for the completing round (the member whose payoutOrder equals
+   * currentRound - 1). The round only advances if the on-chain call succeeds.
+   * The transaction hash is stored on the recipient's Membership record.
+   * Everything is wrapped in a DB transaction so the DB stays in sync with
+   * the chain.
+   *
    * If currentRound exceeds totalRounds, the group is marked as COMPLETED.
    *
    * @param groupId - The UUID of the group
@@ -442,6 +467,7 @@ export class GroupsService {
    * @throws NotFoundException if the group doesn't exist
    * @throws ForbiddenException if the requester is not the group admin
    * @throws BadRequestException if the group is not ACTIVE or members haven't paid
+   * @throws InternalServerErrorException if the on-chain payout fails
    */
   async advanceRound(groupId: string, adminWallet: string): Promise<Group> {
     this.logger.log(
@@ -449,6 +475,7 @@ export class GroupsService {
       'GroupsService',
     );
 
+    // Load group outside the transaction for validation (read-only checks)
     const group = await this.groupRepository.findOne({
       where: { id: groupId },
       relations: ['memberships'],
@@ -475,43 +502,115 @@ export class GroupsService {
       );
     }
 
-    group.currentRound += 1;
+    // Determine the recipient for the completing round.
+    // payoutOrder is 0-indexed; currentRound is 1-indexed, so the recipient
+    // for round N has payoutOrder === N - 1.
+    const completingRoundIndex = group.currentRound - 1;
+    const recipient = (group.memberships || []).find(
+      (m) => m.payoutOrder === completingRoundIndex,
+    );
 
-    // Clear stale flag when group is updated
-    if (group.staleAt) {
-      group.staleAt = null;
+    // Emit the on-chain payout BEFORE touching the DB round counter.
+    // If this throws, the DB transaction never commits.
+    let txHash: string | null = null;
+    if (recipient && group.contractAddress) {
       this.logger.log(
-        `Cleared stale flag for group ${groupId} during round advance`,
+        `Disbursing payout to ${recipient.walletAddress} for round ${group.currentRound} of group ${groupId}`,
         'GroupsService',
       );
-    }
-
-    if (group.currentRound > group.totalRounds) {
-      group.status = GroupStatus.COMPLETED;
-      this.logger.log(`Group ${groupId} marked as COMPLETED`, 'GroupsService');
-    } else {
-      // Reset payment flags for new round
-      for (const membership of group.memberships || []) {
-        membership.hasPaidCurrentRound = false;
-        await this.membershipRepository.save(membership);
-      }
-
-      // Send notifications
-      for (const membership of group.memberships || []) {
-        await this.notificationsService.notify({
-          userId: membership.userId,
-          type: NotificationType.ROUND_OPENED,
-          title: 'New Round Started',
-          body: `Round ${group.currentRound} has started for group "${group.name}"`,
-          metadata: {
-            groupId: group.id,
-            round: group.currentRound,
-          },
-        });
+      try {
+        txHash = await this.stellarService.disbursePayout(
+          group.contractAddress,
+          recipient.walletAddress,
+          group.contributionAmount,
+        );
+        this.logger.log(
+          `On-chain payout successful, txHash=${txHash}`,
+          'GroupsService',
+        );
+      } catch (payoutError) {
+        this.logger.error(
+          `On-chain payout failed for group ${groupId}: ${(payoutError as Error).message}`,
+          (payoutError as Error).stack,
+          'GroupsService',
+        );
+        throw new InternalServerErrorException(
+          'On-chain payout failed; round not advanced',
+        );
       }
     }
 
-    const savedGroup = await this.groupRepository.save(group);
+    // Wrap all DB mutations in a transaction so the round only advances when
+    // everything (including the txHash write) succeeds atomically.
+    const savedGroup = await this.dataSource.transaction(async (manager) => {
+      const groupRepo = manager.getRepository(Group);
+      const membershipRepo = manager.getRepository(Membership);
+
+      // Re-fetch inside the transaction to get a fresh lock
+      const lockedGroup = await groupRepo.findOne({
+        where: { id: groupId },
+        relations: ['memberships'],
+      });
+
+      if (!lockedGroup) {
+        throw new NotFoundException('Group not found');
+      }
+
+      // Store the transaction hash on the recipient's membership
+      if (recipient && txHash) {
+        const recipientMembership = lockedGroup.memberships?.find(
+          (m) => m.id === recipient.id,
+        );
+        if (recipientMembership) {
+          recipientMembership.transactionHash = txHash;
+          await membershipRepo.save(recipientMembership);
+        }
+      }
+
+      lockedGroup.currentRound += 1;
+
+      // Clear stale flag when group is updated
+      if (lockedGroup.staleAt) {
+        lockedGroup.staleAt = null;
+        this.logger.log(
+          `Cleared stale flag for group ${groupId} during round advance`,
+          'GroupsService',
+        );
+      }
+
+      if (lockedGroup.currentRound > lockedGroup.totalRounds) {
+        lockedGroup.status = GroupStatus.COMPLETED;
+        this.logger.log(
+          `Group ${groupId} marked as COMPLETED`,
+          'GroupsService',
+        );
+      } else {
+        // Reset payment flags for new round
+        for (const membership of lockedGroup.memberships || []) {
+          membership.hasPaidCurrentRound = false;
+          await membershipRepo.save(membership);
+        }
+      }
+
+      return groupRepo.save(lockedGroup);
+    });
+
+    // Send notifications outside the DB transaction (non-critical)
+    if (savedGroup.status !== GroupStatus.COMPLETED) {
+      const notificationDtos = (group.memberships || []).map((membership) => ({
+        userId: membership.userId,
+        type: NotificationType.ROUND_OPENED,
+        title: 'New Round Started',
+        body: `Round ${savedGroup.currentRound} has started for group "${group.name}"`,
+        metadata: {
+          groupId: group.id,
+          round: savedGroup.currentRound,
+        },
+        idempotencyKey: `${group.id}-${savedGroup.currentRound}-${membership.userId}-ROUND_OPENED`,
+      }));
+
+      await this.notificationsService.notifyBatch(notificationDtos);
+    }
 
     this.logger.log(
       `Group ${groupId} advanced to round ${savedGroup.currentRound}`,

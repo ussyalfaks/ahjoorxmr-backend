@@ -5,7 +5,17 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { ThrottlerGuard, ThrottlerException } from '@nestjs/throttler';
+import {
+  ThrottlerGuard,
+  ThrottlerException,
+  ThrottlerLimitDetail,
+  InjectThrottlerOptions,
+  InjectThrottlerStorage,
+} from '@nestjs/throttler';
+import type {
+  ThrottlerStorage,
+  ThrottlerModuleOptions,
+} from '@nestjs/throttler';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { TrustedIpService } from '../services/trusted-ip.service';
@@ -25,11 +35,14 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
   private readonly logger = new Logger(CustomThrottlerGuard.name);
 
   constructor(
-    options: any,
-    private readonly trustedIpService: TrustedIpService,
+    @InjectThrottlerOptions()
+    protected readonly options: ThrottlerModuleOptions,
+    @InjectThrottlerStorage()
+    protected readonly storageService: ThrottlerStorage,
     protected readonly reflector: Reflector,
+    protected readonly trustedIpService: TrustedIpService,
   ) {
-    super(options, null as any, reflector);
+    super(options, storageService, reflector);
   }
 
   /**
@@ -236,5 +249,23 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
   private async getBlockExpiry(ip: string): Promise<number> {
     // This would need Redis TTL check - simplified here
     return Date.now() + 3600000; // 1 hour default
+  }
+
+  /**
+   * Override throwThrottlingException to ensure Retry-After header is always set correctly
+   */
+  protected async throwThrottlingException(
+    context: ExecutionContext,
+    throttlerLimitDetail: ThrottlerLimitDetail,
+  ): Promise<void> {
+    const { res } = this.getRequestResponse(context);
+    const waitTime = Math.ceil(throttlerLimitDetail.timeToExpire);
+
+    // Set standard Retry-After header in seconds
+    res.header('Retry-After', waitTime.toString());
+
+    throw new ThrottlerException(
+      await this.getErrorMessage(context, throttlerLimitDetail),
+    );
   }
 }

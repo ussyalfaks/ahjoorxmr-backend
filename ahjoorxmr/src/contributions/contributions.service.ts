@@ -13,6 +13,7 @@ import { CreateContributionDto } from './dto/create-contribution.dto';
 import { StellarService } from '../stellar/stellar.service';
 import { ConfigService } from '@nestjs/config';
 import { GetContributionsQueryDto } from './dto/get-contributions-query.dto';
+import { RoundService } from '../groups/round.service';
 
 /**
  * Service responsible for managing contribution operations in ROSCA groups.
@@ -28,6 +29,7 @@ export class ContributionsService {
     private readonly logger: WinstonLogger,
     private readonly stellarService: StellarService,
     private readonly configService: ConfigService,
+    private readonly roundService: RoundService,
   ) {}
 
   /**
@@ -85,6 +87,19 @@ export class ContributionsService {
         );
         throw new BadRequestException(
           'Contributions can only be made to ACTIVE groups',
+        );
+      }
+
+      // Validate contribution window using timezone-aware comparison
+      const now = new Date();
+      if (group.startDate && now < group.startDate) {
+        throw new BadRequestException(
+          `Contribution window has not opened yet (opens at ${group.startDate.toISOString()} in timezone ${group.timezone ?? 'UTC'})`,
+        );
+      }
+      if (group.endDate && now > group.endDate) {
+        throw new BadRequestException(
+          `Contribution window has closed (closed at ${group.endDate.toISOString()} in timezone ${group.timezone ?? 'UTC'})`,
         );
       }
 
@@ -150,34 +165,46 @@ export class ContributionsService {
         }
       }
 
-      // Check for duplicate transaction hash
-      const existingContribution = await this.contributionRepository.findOne({
-        where: { transactionHash },
-      });
+      const insertResult = await this.contributionRepository
+        .createQueryBuilder()
+        .insert()
+        .into(Contribution)
+        .values({
+          groupId,
+          userId,
+          walletAddress: createContributionDto.walletAddress,
+          roundNumber,
+          amount: createContributionDto.amount,
+          transactionHash,
+          timestamp: createContributionDto.timestamp,
+        })
+        .orIgnore()
+        .execute();
 
-      if (existingContribution) {
-        this.logger.warn(
-          `Contribution with transaction hash ${transactionHash} already exists`,
-          'ContributionsService',
-        );
+      if (!insertResult.identifiers?.length) {
         throw new ConflictException(
-          'Contribution with this transaction hash already exists',
+          'A contribution for this user and round already exists in this group, or this transaction was already recorded',
         );
       }
 
-      // Create contribution
-      const contribution = this.contributionRepository.create(
-        createContributionDto,
-      );
+      const newId = insertResult.identifiers[0].id as string;
+      const savedContribution = await this.contributionRepository.findOne({
+        where: { id: newId },
+      });
 
-      // Save to database
-      const savedContribution =
-        await this.contributionRepository.save(contribution);
+      if (!savedContribution) {
+        throw new ConflictException(
+          'A contribution for this user and round already exists in this group, or this transaction was already recorded',
+        );
+      }
 
       this.logger.log(
         `Contribution created with id ${savedContribution.id} for user ${userId} in group ${groupId}`,
         'ContributionsService',
       );
+
+      // Attempt automatic round advancement — no-ops if not all members have paid
+      await this.roundService.tryAdvanceRound(groupId);
 
       return savedContribution;
     } catch (error) {
@@ -193,13 +220,22 @@ export class ContributionsService {
       if (error instanceof QueryFailedError) {
         const pgError = error as any;
 
-        // Unique constraint violation (duplicate transaction hash)
+        // Unique constraint violation
         if (pgError.code === '23505') {
+          const constraint = pgError.constraint || '';
           this.logger.error(
-            `Unique constraint violation for transaction hash ${transactionHash}`,
+            `Unique constraint violation: ${constraint}`,
             error.stack,
             'ContributionsService',
           );
+
+          if (constraint === 'UQ_contributions_userId_groupId_roundNumber') {
+            throw new ConflictException(
+              'A contribution for this user and round already exists in this group',
+            );
+          }
+
+          // Default duplicate message (e.g. for transactionHash)
           throw new ConflictException(
             'Contribution with this transaction hash already exists',
           );

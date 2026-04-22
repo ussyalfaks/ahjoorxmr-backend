@@ -73,6 +73,10 @@ export interface SyncAllGroupsJobData {
   batchSize?: number;
 }
 
+export interface ReconcilePayoutJobData {
+  payoutTransactionId: string;
+}
+
 // ---------------------------------------------------------------------------
 // Dead-letter Queue Job Data
 // ---------------------------------------------------------------------------

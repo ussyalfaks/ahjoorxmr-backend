@@ -1,0 +1,6 @@
+export enum PayoutTransactionStatus {
+  PENDING_SUBMISSION = 'PENDING_SUBMISSION',
+  SUBMITTED = 'SUBMITTED',
+  CONFIRMED = 'CONFIRMED',
+  FAILED = 'FAILED',
+}

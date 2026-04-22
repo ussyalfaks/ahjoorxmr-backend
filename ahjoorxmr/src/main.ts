@@ -1,5 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ClassSerializerInterceptor, ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -8,8 +8,10 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { ApiVersionDeprecationInterceptor } from './common/interceptors/api-version-deprecation.interceptor';
 import { WinstonLogger } from './common/logger/winston.logger';
 import { RateLimitHeadersInterceptor } from './throttler/interceptors/rate-limit-headers.interceptor';
+import { initializeTracing } from './common/tracing/tracing';
 
 async function bootstrap() {
+  initializeTracing();
   const app = await NestFactory.create(AppModule, {
     logger: new WinstonLogger(),
   });
@@ -46,6 +48,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
     new TransformInterceptor(),
+    new ClassSerializerInterceptor(reflector),
     new RateLimitHeadersInterceptor(reflector),
     new ApiVersionDeprecationInterceptor(reflector),
   );

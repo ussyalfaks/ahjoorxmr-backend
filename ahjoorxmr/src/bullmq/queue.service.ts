@@ -1,12 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue, JobsOptions } from 'bullmq';
-import {
-  QUEUE_NAMES,
-  JOB_NAMES,
-  RETRY_CONFIG,
-  BACKOFF_DELAYS,
-} from './queue.constants';
+import { QUEUE_NAMES, JOB_NAMES, RETRY_CONFIG } from './queue.constants';
 import {
   SendEmailJobData,
   SendNotificationEmailJobData,
@@ -16,6 +11,7 @@ import {
   ProcessApprovalEventJobData,
   SyncGroupStateJobData,
   SyncAllGroupsJobData,
+  ReconcilePayoutJobData,
 } from './queue.interfaces';
 
 export interface QueueStats {
@@ -56,6 +52,8 @@ export class QueueService {
     @InjectQueue(QUEUE_NAMES.EMAIL) private readonly emailQueue: Queue,
     @InjectQueue(QUEUE_NAMES.EVENT_SYNC) private readonly eventSyncQueue: Queue,
     @InjectQueue(QUEUE_NAMES.GROUP_SYNC) private readonly groupSyncQueue: Queue,
+    @InjectQueue(QUEUE_NAMES.PAYOUT_RECONCILIATION)
+    private readonly payoutReconciliationQueue: Queue,
     @InjectQueue(QUEUE_NAMES.DEAD_LETTER)
     private readonly deadLetterQueue: Queue,
   ) {}
@@ -136,10 +134,15 @@ export class QueueService {
     data: SyncGroupStateJobData,
     opts?: Partial<JobsOptions>,
   ) {
+    const mergedOpts: Partial<JobsOptions> = {
+      ...opts,
+      jobId: data.groupId,
+    };
+
     return this.groupSyncQueue.add(
       JOB_NAMES.SYNC_GROUP_STATE,
       data,
-      defaultJobOptions(opts),
+      defaultJobOptions(mergedOpts),
     );
   }
 
@@ -154,19 +157,37 @@ export class QueueService {
     );
   }
 
+  async addPayoutReconciliation(
+    data: ReconcilePayoutJobData,
+    opts?: Partial<JobsOptions>,
+  ) {
+    return this.payoutReconciliationQueue.add(
+      JOB_NAMES.RECONCILE_PAYOUT,
+      data,
+      defaultJobOptions({
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 5000 },
+        jobId: data.payoutTransactionId,
+        ...opts,
+      }),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Stats
   // ---------------------------------------------------------------------------
   async getStats(): Promise<AllQueueStats> {
-    const [emailStats, eventStats, groupStats, dlStats] = await Promise.all([
-      this.getQueueStats(this.emailQueue),
-      this.getQueueStats(this.eventSyncQueue),
-      this.getQueueStats(this.groupSyncQueue),
-      this.getQueueStats(this.deadLetterQueue),
-    ]);
+    const [emailStats, eventStats, groupStats, payoutStats, dlStats] =
+      await Promise.all([
+        this.getQueueStats(this.emailQueue),
+        this.getQueueStats(this.eventSyncQueue),
+        this.getQueueStats(this.groupSyncQueue),
+        this.getQueueStats(this.payoutReconciliationQueue),
+        this.getQueueStats(this.deadLetterQueue),
+      ]);
 
     return {
-      queues: [emailStats, eventStats, groupStats],
+      queues: [emailStats, eventStats, groupStats, payoutStats],
       deadLetter: dlStats,
       retrievedAt: new Date().toISOString(),
     };
@@ -180,7 +201,7 @@ export class QueueService {
         queue.getCompletedCount(),
         queue.getFailedCount(),
         queue.getDelayedCount(),
-        queue.getPausedCount(),
+        queue.isPaused().then((value) => (value ? 1 : 0)),
       ]);
 
     return {
@@ -200,7 +221,73 @@ export class QueueService {
       this.emailQueue,
       this.eventSyncQueue,
       this.groupSyncQueue,
+      this.payoutReconciliationQueue,
       this.deadLetterQueue,
     ];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dead Letter Queue Management
+  // ---------------------------------------------------------------------------
+  async getDeadLetterJobs() {
+    const jobs = await this.deadLetterQueue.getJobs([
+      'completed',
+      'failed',
+      'waiting',
+    ]);
+
+    return jobs.map((job) => ({
+      id: job.id,
+      name: job.name,
+      data: job.data,
+      failedReason: job.failedReason,
+      attemptsMade: job.attemptsMade,
+      timestamp: job.timestamp,
+    }));
+  }
+
+  async retryDeadLetterJob(jobId: string) {
+    const job = await this.deadLetterQueue.getJob(jobId);
+
+    if (!job) {
+      throw new Error(`Job ${jobId} not found in dead letter queue`);
+    }
+
+    const { originalQueue, originalJobName, originalJobData } = job.data;
+
+    // Get the original queue
+    let targetQueue: Queue;
+    switch (originalQueue) {
+      case QUEUE_NAMES.EMAIL:
+        targetQueue = this.emailQueue;
+        break;
+      case QUEUE_NAMES.EVENT_SYNC:
+        targetQueue = this.eventSyncQueue;
+        break;
+      case QUEUE_NAMES.GROUP_SYNC:
+        targetQueue = this.groupSyncQueue;
+        break;
+      case QUEUE_NAMES.PAYOUT_RECONCILIATION:
+        targetQueue = this.payoutReconciliationQueue;
+        break;
+      default:
+        throw new Error(`Unknown queue: ${originalQueue}`);
+    }
+
+    // Re-add the job to the original queue
+    await targetQueue.add(
+      originalJobName,
+      originalJobData,
+      defaultJobOptions(),
+    );
+
+    // Remove from dead letter queue
+    await job.remove();
+
+    this.logger.log(
+      `Retried job ${jobId} from dead letter queue to ${originalQueue}`,
+    );
+
+    return { success: true, message: `Job ${jobId} retried successfully` };
   }
 }

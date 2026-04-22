@@ -1,0 +1,132 @@
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+          font-family: Arial, sans-serif;
+          background-color: #f5f5f5;
+          margin: 0;
+          padding: 0;
+      }
+      .email-container {
+          max-width: 600px;
+          margin: 20px auto;
+          background-color: #ffffff;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          overflow: hidden;
+      }
+      .email-header {
+          background: linear-gradient(135deg, #f39c12 0%, #e74c3c 100%);
+          color: white;
+          padding: 30px 20px;
+          text-align: center;
+      }
+      .email-header h1 {
+          margin: 0;
+          font-size: 24px;
+      }
+      .email-body {
+          padding: 30px 20px;
+          line-height: 1.6;
+          color: #333;
+      }
+      .urgency-banner {
+          background-color: #fff3cd;
+          border: 2px solid #f39c12;
+          border-radius: 4px;
+          padding: 15px;
+          margin: 20px 0;
+          color: #856404;
+      }{{#if overdueDays}}
+        .overdue-banner { background-color: #f8d7da; border: 2px solid #e74c3c;
+        border-radius: 4px; padding: 15px; margin: 20px 0; color: #721c24; }
+      {{/if}}.payment-box {
+          background-color: #f9f9f9;
+          border-left: 4px solid #f39c12;
+          padding: 15px;
+          margin: 20px 0;
+          border-radius: 4px;
+      }
+      .payment-box p {
+          margin: 8px 0;
+          font-size: 14px;
+      }
+      .payment-box strong {
+          color: #f39c12;
+      }
+      .amount {
+          font-size: 18px;
+          font-weight: bold;
+          color: #e74c3c;
+      }
+      .cta-button {
+          display: inline-block;
+          background-color: #f39c12;
+          color: white;
+          padding: 12px 30px;
+          text-decoration: none;
+          border-radius: 4px;
+          margin: 20px 0;
+          font-weight: bold;
+      }
+      .cta-button:hover {
+          background-color: #d68910;
+      }
+      .email-footer {
+          background-color: #f9f9f9;
+          padding: 20px;
+          text-align: center;
+          font-size: 12px;
+          color: #666;
+          border-top: 1px solid #e0e0e0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="email-header">
+        <h1>⏰ Payment Reminder</h1>
+      </div>
+      <div class="email-body">
+        <p>Hi {{recipientName}},</p>
+
+        {{#if overdueDays}}
+          <div class="overdue-banner">
+            <strong>⚠️ WARNING:</strong>
+            This payment is now
+            <strong>{{overdueDays}} day(s) overdue</strong>. Please process it
+            immediately to avoid penalties.
+          </div>
+        {{else}}
+          <div class="urgency-banner">
+            <strong>📍 Reminder:</strong>
+            Please arrange payment before the deadline to avoid any
+            complications.
+          </div>
+        {{/if}}
+
+        <h2>Payment Due Soon</h2>
+        <div class="payment-box">
+          <p><strong>Invoice Number:</strong> {{invoiceNumber}}</p>
+          <p><strong>Amount Due:</strong>
+            <span class="amount">{{amount}} {{currency}}</span></p>
+          <p><strong>Due Date:</strong> {{dueDate}}</p>
+        </div>
+
+        <p>Please ensure payment is processed by the due date to maintain good
+          standing and avoid any service interruptions.</p>
+
+        <p><a href="{{paymentUrl}}" class="cta-button">Make Payment Now</a></p>
+
+        <p>If you have already processed this payment or have any questions,
+          please ignore this reminder or contact our support team.</p>
+        <p>Best regards,<br />The Finance Team</p>
+      </div>
+      <div class="email-footer">
+        <p>© 2026 Funding Platform. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>

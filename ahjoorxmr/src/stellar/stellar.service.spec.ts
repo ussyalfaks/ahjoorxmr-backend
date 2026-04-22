@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import * as SorobanRpc from '@stellar/stellar-sdk/rpc';
 import { StellarService } from './stellar.service';
+import { WinstonLogger } from '../common/logger/winston.logger';
 
 const mockServer = {
   prepareTransaction: jest.fn(),
@@ -22,7 +23,15 @@ jest.mock('@stellar/stellar-sdk/rpc', () => ({
 describe('StellarService', () => {
   let service: StellarService;
 
-  const mockConfigService = {
+  const mockLogger: Partial<WinstonLogger> = {
+  log: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+  debug: jest.fn(),
+  verbose: jest.fn(),
+};
+
+const mockConfigService = {
     get: jest.fn((key: string, defaultValue?: string) => {
       const values: Record<string, string> = {
         STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
@@ -47,6 +56,7 @@ describe('StellarService', () => {
       providers: [
         StellarService,
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: WinstonLogger, useValue: mockLogger },
       ],
     }).compile();
 
@@ -119,6 +129,34 @@ describe('StellarService', () => {
           'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
         ),
       ).rejects.toThrow(BadGatewayException);
+    });
+
+    it('throws BadGatewayException when simulation returns Soroban error response', async () => {
+      mockServer.simulateTransaction.mockResolvedValue({
+        id: 'SimulateTransactionError',
+        error: 'insufficient balance',
+      });
+
+      await expect(
+        service.getGroupState(
+          'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+        ),
+      ).rejects.toThrow(/insufficient balance/);
+    });
+
+    it('retries simulateTransaction on transient errors then succeeds', async () => {
+      mockServer.simulateTransaction
+        .mockRejectedValueOnce(new Error('socket hang up'))
+        .mockResolvedValueOnce({
+          result: { retval: { id: 'group-1' } },
+        });
+
+      const result = await service.getGroupState(
+        'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+      );
+
+      expect(result).toEqual({ id: 'group-1' });
+      expect(mockServer.simulateTransaction).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -390,6 +428,7 @@ describe('StellarService', () => {
         providers: [
           StellarService,
           { provide: ConfigService, useValue: mockConfigService },
+          { provide: WinstonLogger, useValue: mockLogger },
         ],
       }).compile();
 

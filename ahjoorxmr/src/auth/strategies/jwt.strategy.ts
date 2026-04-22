@@ -3,12 +3,14 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../../users/users.service';
+import { TokenVersionCacheService } from '../../common/redis/token-version-cache.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
+    private readonly tokenVersionCache: TokenVersionCacheService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -20,16 +22,36 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    const user = await this.usersService.findById(payload.sub);
+    const tokenV = payload.tokenVersion ?? 0;
+    const userIdFromJwt = payload.userId as string | undefined;
+
+    if (userIdFromJwt) {
+      const cachedVersion = await this.tokenVersionCache.get(userIdFromJwt);
+      if (cachedVersion !== null && cachedVersion !== tokenV) {
+        throw new UnauthorizedException(
+          'Token version mismatch - session revoked',
+        );
+      }
+    }
+
+    const user = await this.usersService.findByWalletAddress(payload.sub);
     if (!user) {
       throw new UnauthorizedException();
     }
 
-    // Check if token version matches - if not, token has been revoked
-    if (payload.tokenVersion !== user.tokenVersion) {
-      throw new UnauthorizedException('Token version mismatch - session revoked');
+    if (tokenV !== (user.tokenVersion ?? 0)) {
+      throw new UnauthorizedException(
+        'Token version mismatch - session revoked',
+      );
     }
 
-    return { id: user.id, email: user.email, role: user.role };
+    await this.tokenVersionCache.set(user.id, user.tokenVersion ?? 0);
+
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      walletAddress: user.walletAddress,
+    };
   }
 }

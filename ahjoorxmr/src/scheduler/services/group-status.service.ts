@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { Group } from '../../groups/entities/group.entity';
+import { GroupStatus } from '../../groups/entities/group-status.enum';
 import { Membership } from '../../memberships/entities/membership.entity';
+import { RoundService } from '../../groups/round.service';
 
 @Injectable()
 export class GroupStatusService {
@@ -13,7 +15,47 @@ export class GroupStatusService {
     private readonly groupRepository: Repository<Group>,
     @InjectRepository(Membership)
     private readonly membershipRepository: Repository<Membership>,
+    private readonly roundService: RoundService,
   ) {}
+
+  /**
+   * Scheduled fallback: attempt round advancement for ACTIVE groups whose
+   * round deadline has passed (roundDuration days since last update).
+   * This catches groups that stalled because a contribution event was missed.
+   */
+  async advanceStalledRounds(): Promise<number> {
+    let advancedCount = 0;
+
+    try {
+      const activeGroups = await this.groupRepository.find({
+        where: { status: GroupStatus.ACTIVE },
+        select: ['id', 'currentRound', 'roundDuration', 'updatedAt'],
+      });
+
+      for (const group of activeGroups) {
+        const deadlineMs = group.roundDuration * 24 * 60 * 60 * 1000;
+        const elapsed = Date.now() - new Date(group.updatedAt).getTime();
+
+        if (elapsed >= deadlineMs) {
+          const advanced = await this.roundService.tryAdvanceRound(group.id);
+          if (advanced) {
+            advancedCount++;
+            this.logger.log(
+              `Fallback advanced round for stalled group ${group.id}`,
+            );
+          }
+        }
+      }
+
+      this.logger.log(
+        `Fallback round check: advanced ${advancedCount} group(s)`,
+      );
+      return advancedCount;
+    } catch (error) {
+      this.logger.error('Failed during stalled-round fallback check:', error);
+      throw error;
+    }
+  }
 
   /**
    * Check and update group statuses based on business rules

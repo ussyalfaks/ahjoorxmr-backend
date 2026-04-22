@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { QueueService } from '../../queue/queue.service';
-import { QUEUE_NAMES, JOB_NAMES } from '../../queue/queue.constants';
+import { QueueService } from './queue.service';
+import { QUEUE_NAMES, JOB_NAMES } from './queue.constants';
 
 // Factory to create a full mock Queue
 function makeMockQueue(name: string): jest.Mocked<Queue> {
@@ -14,7 +14,7 @@ function makeMockQueue(name: string): jest.Mocked<Queue> {
     getCompletedCount: jest.fn().mockResolvedValue(100),
     getFailedCount: jest.fn().mockResolvedValue(3),
     getDelayedCount: jest.fn().mockResolvedValue(0),
-    getPausedCount: jest.fn().mockResolvedValue(0),
+    isPaused: jest.fn().mockResolvedValue(false),
   } as unknown as jest.Mocked<Queue>;
 }
 
@@ -23,12 +23,16 @@ describe('QueueService', () => {
   let emailQueue: jest.Mocked<Queue>;
   let eventSyncQueue: jest.Mocked<Queue>;
   let groupSyncQueue: jest.Mocked<Queue>;
+  let payoutReconciliationQueue: jest.Mocked<Queue>;
   let deadLetterQueue: jest.Mocked<Queue>;
 
   beforeEach(async () => {
     emailQueue = makeMockQueue(QUEUE_NAMES.EMAIL);
     eventSyncQueue = makeMockQueue(QUEUE_NAMES.EVENT_SYNC);
     groupSyncQueue = makeMockQueue(QUEUE_NAMES.GROUP_SYNC);
+    payoutReconciliationQueue = makeMockQueue(
+      QUEUE_NAMES.PAYOUT_RECONCILIATION,
+    );
     deadLetterQueue = makeMockQueue(QUEUE_NAMES.DEAD_LETTER);
 
     const module: TestingModule = await Test.createTestingModule({
@@ -42,6 +46,10 @@ describe('QueueService', () => {
         {
           provide: getQueueToken(QUEUE_NAMES.GROUP_SYNC),
           useValue: groupSyncQueue,
+        },
+        {
+          provide: getQueueToken(QUEUE_NAMES.PAYOUT_RECONCILIATION),
+          useValue: payoutReconciliationQueue,
         },
         {
           provide: getQueueToken(QUEUE_NAMES.DEAD_LETTER),
@@ -171,7 +179,7 @@ describe('QueueService', () => {
       expect(groupSyncQueue.add).toHaveBeenCalledWith(
         JOB_NAMES.SYNC_GROUP_STATE,
         data,
-        expect.any(Object),
+        expect.objectContaining({ jobId: 'g1' }),
       );
     });
 
@@ -193,7 +201,7 @@ describe('QueueService', () => {
     it('should return stats for all queues', async () => {
       const result = await service.getStats();
 
-      expect(result.queues).toHaveLength(3);
+      expect(result.queues).toHaveLength(4);
       expect(result.deadLetter).toBeDefined();
       expect(result.retrievedAt).toBeDefined();
 
@@ -218,6 +226,7 @@ describe('QueueService', () => {
         emailQueue,
         eventSyncQueue,
         groupSyncQueue,
+        payoutReconciliationQueue,
         deadLetterQueue,
       ]) {
         expect(queue.getWaitingCount).toHaveBeenCalled();
@@ -233,11 +242,12 @@ describe('QueueService', () => {
   describe('getQueues()', () => {
     it('should return all four queues', () => {
       const queues = service.getQueues();
-      expect(queues).toHaveLength(4);
+      expect(queues).toHaveLength(5);
       expect(queues.map((q) => q.name)).toEqual([
         QUEUE_NAMES.EMAIL,
         QUEUE_NAMES.EVENT_SYNC,
         QUEUE_NAMES.GROUP_SYNC,
+        QUEUE_NAMES.PAYOUT_RECONCILIATION,
         QUEUE_NAMES.DEAD_LETTER,
       ]);
     });

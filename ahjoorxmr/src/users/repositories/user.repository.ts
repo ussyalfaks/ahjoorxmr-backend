@@ -125,13 +125,14 @@ export class UserRepository extends Repository<User> {
   /**
    * Ban user
    */
-  async banUser(userId: string, reason: string): Promise<User> {
+  async banUser(userId: string, reason?: string): Promise<User> {
     const user = await this.repository.findOne({ where: { id: userId } });
     if (!user) {
       throw new Error('User not found');
     }
 
-    user.ban(reason);
+    user.ban(reason ?? 'No reason provided');
+    user.tokenVersion = (user.tokenVersion ?? 0) + 1;
     return this.repository.save(user);
   }
 

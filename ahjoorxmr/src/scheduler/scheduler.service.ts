@@ -1,10 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { DistributedLockService } from './services/distributed-lock.service';
 import { AuditLogService } from './services/audit-log.service';
 import { ContributionSummaryService } from './services/contribution-summary.service';
 import { GroupStatusService } from './services/group-status.service';
 import { StaleGroupDetectionService } from './services/stale-group-detection.service';
+import { RoundAdvanceService } from './services/round-advance.service';
+import { RefreshToken } from '../auth/entities/refresh-token.entity';
 
 @Injectable()
 export class SchedulerService {
@@ -18,6 +23,10 @@ export class SchedulerService {
     private readonly contributionSummaryService: ContributionSummaryService,
     private readonly groupStatusService: GroupStatusService,
     private readonly staleGroupDetectionService: StaleGroupDetectionService,
+    private readonly roundAdvanceService: RoundAdvanceService,
+    private readonly configService: ConfigService,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepository: Repository<RefreshToken>,
   ) {}
 
   /**
@@ -118,7 +127,13 @@ export class SchedulerService {
             await this.groupStatusService.updateGroupStatuses();
           const inactiveGroups =
             await this.groupStatusService.checkInactiveGroups();
-          return { updatedCount, inactiveGroupCount: inactiveGroups.length };
+          const advancedCount =
+            await this.groupStatusService.advanceStalledRounds();
+          return {
+            updatedCount,
+            inactiveGroupCount: inactiveGroups.length,
+            advancedCount,
+          };
         }, taskName);
       },
       300, // 5 minutes lock TTL
@@ -171,10 +186,72 @@ export class SchedulerService {
   }
 
   /**
+   * Every-minute task: Auto-advance group rounds when deadline passes.
+   * Configurable via ROUND_ADVANCE_CRON env var (defaults to every minute).
+   */
+  @Cron(CronExpression.EVERY_MINUTE, {
+    name: 'auto-advance-rounds',
+  })
+  async handleAutoAdvanceRounds(): Promise<void> {
+    const taskName = 'auto-advance-rounds';
+    const startTime = Date.now();
+
+    this.logger.log(`Starting task: ${taskName}`);
+
+    const result = await this.lockService.withLock(
+      taskName,
+      async () => {
+        return await this.executeWithRetry(async () => {
+          return await this.roundAdvanceService.processDeadlinedGroups();
+        }, taskName);
+      },
+      55, // 55-second lock TTL — expires before next minute tick to stay idempotent
+    );
+
+    const duration = Date.now() - startTime;
+
+    if (result) {
+      this.logger.log(
+        `Task ${taskName} completed in ${duration}ms. Advanced: ${result.advanced}, Reminded: ${result.reminded}, Errors: ${result.errors}.`,
+      );
+    } else {
+      this.logger.warn(`Task ${taskName} was skipped (lock not acquired)`);
+    }
+  }
+
+  /**
+   * Daily task: Clean up expired refresh token rows (runs at 4 AM).
+   * Keeps the refresh_tokens table lean and ensures expired tokens cannot be reused.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_4AM, { name: 'cleanup-expired-refresh-tokens' })
+  async handleCleanupExpiredRefreshTokens(): Promise<void> {
+    const taskName = 'cleanup-expired-refresh-tokens';
+    this.logger.log(`Starting task: ${taskName}`);
+
+    const result = await this.lockService.withLock(
+      taskName,
+      async () => {
+        return await this.executeWithRetry(async () => {
+          const deleted = await this.refreshTokenRepository.delete({
+            expiresAt: LessThan(new Date()),
+          });
+          return { deletedCount: deleted.affected ?? 0 };
+        }, taskName);
+      },
+      300,
+    );
+
+    if (result) {
+      this.logger.log(`Task ${taskName} completed. Deleted ${result.deletedCount} expired refresh tokens.`);
+    } else {
+      this.logger.warn(`Task ${taskName} was skipped (lock not acquired)`);
+    }
+  }
+
+  /**
    * Execute a task with exponential backoff retry logic
    */
-  private async executeWithRetry<T>(
-    fn: () => Promise<T>,
+  private async executeWithRetry<T>(    fn: () => Promise<T>,
     taskName: string,
   ): Promise<T> {
     let lastError: Error | undefined;

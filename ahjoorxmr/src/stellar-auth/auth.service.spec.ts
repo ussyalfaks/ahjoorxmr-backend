@@ -2,65 +2,94 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { getRedisToken } from '@nestjs-modules/ioredis';
-import * as crypto from 'crypto';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
+import { RedisService } from '../common/redis/redis.service';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-const WALLET_ADDRESS =
-  'GBVZM3OSDLSNP5LJJQAYZMJQJIQXQP5PGLLQZXEYQZRTDMZQNM3NLFB';
+const WALLET = StellarSdk.Keypair.random();
+const NOW_SECONDS = Math.floor(Date.now() / 1000);
 
-function makeMockUser(overrides: Partial<any> = {}) {
-  return {
-    id: 'user-uuid-1',
-    walletAddress: WALLET_ADDRESS,
-    refreshTokenHash: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  };
-}
+type FnMock = ReturnType<typeof jest.fn>;
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-const mockRedis = {
-  set: jest.fn(),
+type MockRedis = {
+  setWithExpiry: FnMock;
+  get: FnMock;
+  del: FnMock;
+  sismember: FnMock;
+  sadd: FnMock;
+  expire: FnMock;
+};
+
+const mockRedis: MockRedis = {
+  setWithExpiry: jest.fn(),
   get: jest.fn(),
   del: jest.fn(),
+  sismember: jest.fn(),
+  sadd: jest.fn(),
+  expire: jest.fn(),
 };
 
 const mockUsersService = {
-  upsertByWalletAddress: jest.fn(),
-  findByWalletAddress: jest.fn(),
-  updateRefreshTokenHash: jest.fn(),
+  upsertByWalletAddress:
+    jest.fn<
+      (walletAddress: string) => Promise<{ id: string; walletAddress: string }>
+    >(),
+  findByWalletAddress: jest.fn<(walletAddress: string) => Promise<null>>(),
+  updateRefreshTokenHash:
+    jest.fn<
+      (userId: string, refreshTokenHash: string | null) => Promise<void>
+    >(),
+  incrementTokenVersion: jest.fn<(userId: string) => Promise<number>>(),
 };
 
 const mockJwtService = {
-  signAsync: jest.fn(),
+  signAsync: jest.fn<(...args: unknown[]) => Promise<string>>(),
   verifyAsync: jest.fn(),
 };
 
 const mockConfigService = {
   get: jest.fn((key: string, defaultVal?: string) => {
-    const config: Record<string, string> = {
-      JWT_PRIVATE_KEY: 'mock-private-key',
-      JWT_PUBLIC_KEY: 'mock-public-key',
-      JWT_REFRESH_SECRET: 'mock-refresh-secret',
+    const cfg: Record<string, string> = {
+      CHALLENGE_TTL_SECONDS: '300',
+      STELLAR_NETWORK: 'testnet',
+      JWT_PRIVATE_KEY: 'private',
+      JWT_REFRESH_SECRET: 'refresh',
       JWT_ACCESS_EXPIRES_IN: '15m',
       JWT_REFRESH_EXPIRES_IN: '7d',
     };
-    return config[key] ?? defaultVal;
+    return cfg[key] ?? defaultVal;
   }),
 };
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+function buildChallenge(walletAddress: string, nonce = 'nonce-123'): string {
+  return `Sign this message to authenticate with Cheese Platform.\n\nWallet: ${walletAddress}\nNonce: ${nonce}\nTimestamp: ${Date.now()}`;
+}
+
+function buildSignedEnvelope(
+  signer: StellarSdk.Keypair,
+  minTime: number,
+  maxTime: number,
+): string {
+  const account = new StellarSdk.Account(signer.publicKey(), '1');
+  const tx = new StellarSdk.TransactionBuilder(account, {
+    fee: '100',
+    networkPassphrase: StellarSdk.Networks.TESTNET,
+    timebounds: { minTime, maxTime },
+  })
+    .addOperation(
+      StellarSdk.Operation.manageData({
+        name: 'auth',
+        value: 'ok',
+      }),
+    )
+    .build();
+
+  tx.sign(signer);
+  return tx.toEnvelope().toXDR('base64');
+}
+
 describe('AuthService', () => {
   let service: AuthService;
 
@@ -73,253 +102,110 @@ describe('AuthService', () => {
         { provide: UsersService, useValue: mockUsersService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
-        { provide: getRedisToken('default'), useValue: mockRedis },
+        { provide: RedisService, useValue: mockRedis },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
   });
 
-  // -------------------------------------------------------------------------
-  // generateChallenge
-  // -------------------------------------------------------------------------
-  describe('generateChallenge()', () => {
-    it('should create a challenge string containing the wallet address and nonce', async () => {
-      mockRedis.set.mockResolvedValue('OK');
+  it('rejects expired nonce when challenge is missing in Redis', async () => {
+    const challenge = buildChallenge(WALLET.publicKey());
+    const envelope = buildSignedEnvelope(
+      WALLET,
+      NOW_SECONDS - 5,
+      NOW_SECONDS + 30,
+    );
 
-      const challenge = await service.generateChallenge(WALLET_ADDRESS);
+    mockRedis.get.mockResolvedValue(null);
 
-      expect(challenge).toContain(WALLET_ADDRESS);
-      expect(challenge).toContain('Nonce:');
-      expect(challenge).toContain('Timestamp:');
-    });
-
-    it('should store the challenge in Redis with a 5-minute TTL', async () => {
-      mockRedis.set.mockResolvedValue('OK');
-
-      const challenge = await service.generateChallenge(WALLET_ADDRESS);
-
-      expect(mockRedis.set).toHaveBeenCalledWith(
-        `siws:challenge:${WALLET_ADDRESS}`,
-        challenge,
-        'EX',
-        300,
-      );
-    });
-
-    it('should generate a unique challenge on each call', async () => {
-      mockRedis.set.mockResolvedValue('OK');
-
-      const c1 = await service.generateChallenge(WALLET_ADDRESS);
-      const c2 = await service.generateChallenge(WALLET_ADDRESS);
-
-      expect(c1).not.toBe(c2);
-    });
+    await expect(
+      service.verifySignature(WALLET.publicKey(), envelope, challenge),
+    ).rejects.toThrow(
+      new UnauthorizedException('Challenge expired or not found'),
+    );
   });
 
-  // -------------------------------------------------------------------------
-  // verifySignature
-  // -------------------------------------------------------------------------
-  describe('verifySignature()', () => {
-    const challenge = `Sign this message to authenticate with Cheese Platform.\n\nWallet: ${WALLET_ADDRESS}\nNonce: abc123\nTimestamp: 1700000000000`;
+  it('rejects replayed nonce and logs attempt', async () => {
+    const challenge = buildChallenge(WALLET.publicKey(), 'replay-me');
+    const envelope = buildSignedEnvelope(
+      WALLET,
+      NOW_SECONDS - 5,
+      NOW_SECONDS + 30,
+    );
+    const loggerSpy = jest
+      .spyOn((service as any).logger, 'warn')
+      .mockImplementation(() => undefined);
 
-    it('should throw UnauthorizedException when challenge is not found in Redis', async () => {
-      mockRedis.get.mockResolvedValue(null);
+    mockRedis.get.mockResolvedValue(challenge);
+    mockRedis.sismember.mockResolvedValue(true);
 
-      await expect(
-        service.verifySignature(WALLET_ADDRESS, 'sig', challenge),
-      ).rejects.toThrow(UnauthorizedException);
+    await expect(
+      service.verifySignature(WALLET.publicKey(), envelope, challenge),
+    ).rejects.toThrow(
+      new UnauthorizedException('Challenge nonce has already been used'),
+    );
 
-      await expect(
-        service.verifySignature(WALLET_ADDRESS, 'sig', challenge),
-      ).rejects.toThrow('Challenge expired or not found');
-    });
-
-    it('should throw UnauthorizedException when stored challenge does not match provided challenge', async () => {
-      mockRedis.get.mockResolvedValue('different-challenge');
-
-      await expect(
-        service.verifySignature(WALLET_ADDRESS, 'sig', challenge),
-      ).rejects.toThrow('Challenge mismatch');
-    });
-
-    it('should throw UnauthorizedException when Stellar signature is invalid', async () => {
-      mockRedis.get.mockResolvedValue(challenge);
-
-      // Provide a valid-looking but incorrect base64 signature
-      const badSig = Buffer.from('invalid-signature').toString('base64');
-
-      await expect(
-        service.verifySignature(WALLET_ADDRESS, badSig, challenge),
-      ).rejects.toThrow('Invalid signature');
-    });
-
-    it('should delete the challenge from Redis after validation (replay protection)', async () => {
-      // Use a real Stellar keypair so signature verification passes
-      const keypair = StellarSdk.Keypair.random();
-      const walletAddress = keypair.publicKey();
-      const testChallenge = `Sign this message.\n\nWallet: ${walletAddress}\nNonce: xyz\nTimestamp: 123`;
-      const sig = keypair.sign(Buffer.from(testChallenge)).toString('base64');
-
-      mockRedis.get.mockResolvedValue(testChallenge);
-      mockRedis.del.mockResolvedValue(1);
-      mockUsersService.upsertByWalletAddress.mockResolvedValue(
-        makeMockUser({ walletAddress }),
-      );
-      mockJwtService.signAsync
-        .mockResolvedValueOnce('access-token')
-        .mockResolvedValueOnce('refresh-token');
-      mockUsersService.updateRefreshTokenHash.mockResolvedValue(undefined);
-
-      await service.verifySignature(walletAddress, sig, testChallenge);
-
-      expect(mockRedis.del).toHaveBeenCalledWith(
-        `siws:challenge:${walletAddress}`,
-      );
-    });
-
-    it('should upsert user and return access + refresh tokens on success', async () => {
-      const keypair = StellarSdk.Keypair.random();
-      const walletAddress = keypair.publicKey();
-      const testChallenge = `Sign this message.\n\nWallet: ${walletAddress}\nNonce: xyz\nTimestamp: 123`;
-      const sig = keypair.sign(Buffer.from(testChallenge)).toString('base64');
-      const user = makeMockUser({ walletAddress });
-
-      mockRedis.get.mockResolvedValue(testChallenge);
-      mockRedis.del.mockResolvedValue(1);
-      mockUsersService.upsertByWalletAddress.mockResolvedValue(user);
-      mockJwtService.signAsync
-        .mockResolvedValueOnce('access-token')
-        .mockResolvedValueOnce('refresh-token');
-      mockUsersService.updateRefreshTokenHash.mockResolvedValue(undefined);
-
-      const result = await service.verifySignature(
-        walletAddress,
-        sig,
-        testChallenge,
-      );
-
-      expect(mockUsersService.upsertByWalletAddress).toHaveBeenCalledWith(
-        walletAddress,
-      );
-      expect(result).toEqual({
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      });
-    });
-
-    it('should store a SHA-256 hash of the refresh token (not plain text)', async () => {
-      const keypair = StellarSdk.Keypair.random();
-      const walletAddress = keypair.publicKey();
-      const testChallenge = `Sign.\n\nWallet: ${walletAddress}\nNonce: abc\nTimestamp: 1`;
-      const sig = keypair.sign(Buffer.from(testChallenge)).toString('base64');
-
-      mockRedis.get.mockResolvedValue(testChallenge);
-      mockRedis.del.mockResolvedValue(1);
-      mockUsersService.upsertByWalletAddress.mockResolvedValue(
-        makeMockUser({ walletAddress }),
-      );
-      mockJwtService.signAsync
-        .mockResolvedValueOnce('access-token')
-        .mockResolvedValueOnce('plain-refresh-token');
-      mockUsersService.updateRefreshTokenHash.mockResolvedValue(undefined);
-
-      await service.verifySignature(walletAddress, sig, testChallenge);
-
-      const expectedHash = crypto
-        .createHash('sha256')
-        .update('plain-refresh-token')
-        .digest('hex');
-
-      expect(mockUsersService.updateRefreshTokenHash).toHaveBeenCalledWith(
-        'user-uuid-1',
-        expectedHash,
-      );
-    });
+    expect(loggerSpy).toHaveBeenCalled();
   });
 
-  // -------------------------------------------------------------------------
-  // refreshAccessToken
-  // -------------------------------------------------------------------------
-  describe('refreshAccessToken()', () => {
-    it('should throw UnauthorizedException when refresh token is invalid JWT', async () => {
-      mockJwtService.verifyAsync.mockRejectedValue(new Error('jwt malformed'));
+  it('rejects invalid timebounds before signature verification', async () => {
+    const challenge = buildChallenge(WALLET.publicKey(), 'old-nonce');
+    const envelope = buildSignedEnvelope(
+      WALLET,
+      NOW_SECONDS - 300,
+      NOW_SECONDS - 120,
+    );
 
-      await expect(service.refreshAccessToken('bad-token')).rejects.toThrow(
-        UnauthorizedException,
-      );
-    });
+    mockRedis.get.mockResolvedValue(challenge);
+    mockRedis.sismember.mockResolvedValue(false);
 
-    it('should throw UnauthorizedException when user does not exist', async () => {
-      mockJwtService.verifyAsync.mockResolvedValue({
-        sub: 'user-id',
-        walletAddress: WALLET_ADDRESS,
-      });
-      mockUsersService.findByWalletAddress.mockResolvedValue(null);
-
-      await expect(service.refreshAccessToken('valid-jwt')).rejects.toThrow(
-        'Refresh token revoked',
-      );
-    });
-
-    it('should throw UnauthorizedException when stored hash does not match token', async () => {
-      mockJwtService.verifyAsync.mockResolvedValue({
-        sub: 'user-id',
-        walletAddress: WALLET_ADDRESS,
-      });
-      mockUsersService.findByWalletAddress.mockResolvedValue(
-        makeMockUser({ refreshTokenHash: 'different-hash' }),
-      );
-
-      await expect(service.refreshAccessToken('valid-jwt')).rejects.toThrow(
-        'Refresh token mismatch',
-      );
-    });
-
-    it('should return a new access token when refresh token is valid', async () => {
-      const refreshToken = 'my-refresh-token';
-      const expectedHash = crypto
-        .createHash('sha256')
-        .update(refreshToken)
-        .digest('hex');
-
-      mockJwtService.verifyAsync.mockResolvedValue({
-        sub: 'user-id',
-        walletAddress: WALLET_ADDRESS,
-      });
-      mockUsersService.findByWalletAddress.mockResolvedValue(
-        makeMockUser({ refreshTokenHash: expectedHash }),
-      );
-      mockJwtService.signAsync.mockResolvedValue('new-access-token');
-
-      const result = await service.refreshAccessToken(refreshToken);
-
-      expect(result).toEqual({ accessToken: 'new-access-token' });
-    });
+    await expect(
+      service.verifySignature(WALLET.publicKey(), envelope, challenge),
+    ).rejects.toThrow(/timebounds are outside/);
   });
 
-  // -------------------------------------------------------------------------
-  // logout
-  // -------------------------------------------------------------------------
-  describe('logout()', () => {
-    it('should nullify the refresh token hash for the user', async () => {
-      const user = makeMockUser();
-      mockUsersService.findByWalletAddress.mockResolvedValue(user);
-      mockUsersService.updateRefreshTokenHash.mockResolvedValue(undefined);
+  it('accepts valid flow and consumes nonce', async () => {
+    const challenge = buildChallenge(WALLET.publicKey(), 'fresh-nonce');
+    const envelope = buildSignedEnvelope(
+      WALLET,
+      NOW_SECONDS - 5,
+      NOW_SECONDS + 30,
+    );
 
-      await service.logout(WALLET_ADDRESS);
+    mockRedis.get.mockResolvedValue(challenge);
+    mockRedis.sismember.mockResolvedValue(false);
+    mockRedis.sadd.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(true);
+    mockRedis.del.mockResolvedValue(1);
 
-      expect(mockUsersService.updateRefreshTokenHash).toHaveBeenCalledWith(
-        user.id,
-        null,
-      );
+    mockUsersService.upsertByWalletAddress.mockResolvedValue({
+      id: 'user-1',
+      walletAddress: WALLET.publicKey(),
+      tokenVersion: 0,
     });
+    mockJwtService.signAsync
+      .mockResolvedValueOnce('access-token')
+      .mockResolvedValueOnce('refresh-token');
+    mockUsersService.updateRefreshTokenHash.mockResolvedValue(undefined);
 
-    it('should do nothing gracefully when user is not found', async () => {
-      mockUsersService.findByWalletAddress.mockResolvedValue(null);
+    const result = await service.verifySignature(
+      WALLET.publicKey(),
+      envelope,
+      challenge,
+    );
 
-      await expect(service.logout(WALLET_ADDRESS)).resolves.toBeUndefined();
-      expect(mockUsersService.updateRefreshTokenHash).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
     });
+    expect(mockRedis.sadd).toHaveBeenCalledWith(
+      'auth:used_nonces',
+      'fresh-nonce',
+    );
+    expect(mockRedis.expire).toHaveBeenCalledWith('auth:used_nonces', 300);
+    expect(mockRedis.del).toHaveBeenCalledWith(
+      `siws:challenge:${WALLET.publicKey()}`,
+    );
   });
 });

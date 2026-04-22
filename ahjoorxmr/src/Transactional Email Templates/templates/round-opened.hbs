@@ -1,0 +1,106 @@
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f5f5f5;
+        margin: 0;
+        padding: 0;
+      }
+      .email-container {
+        max-width: 600px;
+        margin: 20px auto;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+      .email-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px 20px;
+        text-align: center;
+      }
+      .email-header h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+      .email-body {
+        padding: 30px 20px;
+        line-height: 1.6;
+        color: #333;
+      }
+      .email-body h2 {
+        color: #667eea;
+        font-size: 18px;
+        margin-top: 0;
+      }
+      .details {
+        background-color: #f9f9f9;
+        border-left: 4px solid #667eea;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 4px;
+      }
+      .details p {
+        margin: 8px 0;
+        font-size: 14px;
+      }
+      .details strong {
+        color: #667eea;
+      }
+      .cta-button {
+        display: inline-block;
+        background-color: #667eea;
+        color: white;
+        padding: 12px 30px;
+        text-decoration: none;
+        border-radius: 4px;
+        margin: 20px 0;
+        font-weight: bold;
+      }
+      .cta-button:hover {
+        background-color: #5568d3;
+      }
+      .email-footer {
+        background-color: #f9f9f9;
+        padding: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: #666;
+        border-top: 1px solid #e0e0e0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="email-header">
+        <h1>🎉 New Funding Round Open</h1>
+      </div>
+      <div class="email-body">
+        <p>Hi {{recipientName}},</p>
+        <p>We're excited to announce a new funding opportunity that might be
+          perfect for your project!</p>
+
+        <h2>{{roundName}}</h2>
+        <div class="details">
+          <p><strong>Description:</strong><br />{{roundDescription}}</p>
+          <p><strong>Start Date:</strong> {{startDate}}</p>
+          <p><strong>End Date:</strong> {{endDate}}</p>
+          <p><strong>Application Deadline:</strong> {{applicationDeadline}}</p>
+        </div>
+
+        <p><a href="{{roundUrl}}" class="cta-button">View Opportunity</a></p>
+
+        <p>If you have any questions, feel free to reach out to our support
+          team.</p>
+        <p>Best regards,<br />The Funding Team</p>
+      </div>
+      <div class="email-footer">
+        <p>© 2026 Funding Platform. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>
