@@ -42,6 +42,7 @@ import { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { MetricsModule } from './metrics/metrics.module';
 import { MetricsInterceptor } from './metrics/metrics.interceptor';
+import { WebhookModule } from './webhooks/webhook.module';
 
 @Module({
   imports: [
@@ -114,6 +115,7 @@ import { MetricsInterceptor } from './metrics/metrics.interceptor';
     CommonModule,
     MailModule,
     MetricsModule,
+    WebhookModule,
   ],
   controllers: [AppController],
   providers: [
