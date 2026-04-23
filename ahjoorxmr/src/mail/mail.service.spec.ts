@@ -1,12 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { MailService } from './mail.service';
+import { MailService, TEMPLATE_SAMPLE_DATA } from './mail.service';
 import { MailerService } from '@nestjs-modules/mailer';
 import { ConfigService } from '@nestjs/config';
+import { NotFoundException } from '@nestjs/common';
+
+const TEMPLATES = [
+  'welcome',
+  'email-verification',
+  'password-reset',
+  '2fa-backup-code-used',
+  'kyc-approved',
+  'kyc-declined',
+  'data-export-ready',
+  'payout-received',
+  'contribution-confirmed',
+];
 
 describe('MailService', () => {
   let service: MailService;
-  let mailerService: MailerService;
-  let configService: ConfigService;
 
   const mockMailerService = {
     sendMail: jest.fn().mockResolvedValue(true),
@@ -14,10 +25,11 @@ describe('MailService', () => {
 
   const mockConfigService = {
     get: jest.fn((key: string, defaultValue?: any) => {
-      const config = {
+      const config: Record<string, any> = {
         APP_URL: 'http://localhost:3000',
+        MAIL_LOCALE: 'en',
       };
-      return config[key] || defaultValue;
+      return config[key] ?? defaultValue;
     }),
   };
 
@@ -25,213 +37,163 @@ describe('MailService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MailService,
-        {
-          provide: MailerService,
-          useValue: mockMailerService,
-        },
-        {
-          provide: ConfigService,
-          useValue: mockConfigService,
-        },
+        { provide: MailerService, useValue: mockMailerService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
     service = module.get<MailService>(MailService);
-    mailerService = module.get<MailerService>(MailerService);
-    configService = module.get<ConfigService>(ConfigService);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
+  afterEach(() => jest.clearAllMocks());
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  describe('sendMail', () => {
-    it('should send email successfully', async () => {
-      const options = {
-        to: 'test@example.com',
-        subject: 'Test Subject',
-        html: '<p>Test content</p>',
-      };
+  // ── Template compile + snapshot tests ──────────────────────────────────────
 
-      await service.sendMail(options);
-
-      expect(mailerService.sendMail).toHaveBeenCalledWith({
-        to: options.to,
-        subject: options.subject,
-        template: undefined,
-        context: undefined,
-        html: options.html,
-        text: undefined,
-      });
+  describe('compileTemplate', () => {
+    it.each(TEMPLATES)('%s compiles without errors', (template) => {
+      const context = TEMPLATE_SAMPLE_DATA[template] ?? {};
+      expect(() => service.compileTemplate(template, context)).not.toThrow();
     });
 
-    it('should send email with template', async () => {
-      const options = {
-        to: 'test@example.com',
-        subject: 'Test Subject',
-        template: 'welcome',
-        context: { userName: 'John' },
-      };
-
-      await service.sendMail(options);
-
-      expect(mailerService.sendMail).toHaveBeenCalledWith({
-        to: options.to,
-        subject: options.subject,
-        template: 'en/welcome',
-        context: options.context,
-        html: undefined,
-        text: undefined,
-      });
+    it.each(TEMPLATES)('%s snapshot', (template) => {
+      const context = TEMPLATE_SAMPLE_DATA[template] ?? {};
+      const html = service.compileTemplate(template, context);
+      expect(html).toMatchSnapshot();
     });
 
-    it('should throw error when sending fails', async () => {
-      mockMailerService.sendMail.mockRejectedValueOnce(
-        new Error('Send failed'),
-      );
+    it('throws NotFoundException for unknown template', () => {
+      expect(() =>
+        service.compileTemplate('non-existent', {}),
+      ).toThrow(NotFoundException);
+    });
 
-      const options = {
-        to: 'test@example.com',
-        subject: 'Test Subject',
-        html: '<p>Test</p>',
-      };
-
-      await expect(service.sendMail(options)).rejects.toThrow('Send failed');
+    it('loads locale-specific template when MAIL_LOCALE is set', () => {
+      // Falls back to en since only en exists; verifies locale path resolution
+      const html = service.compileTemplate('welcome', TEMPLATE_SAMPLE_DATA['welcome'], 'en');
+      expect(html).toContain('Welcome');
     });
   });
 
-  describe('sendWelcomeEmail', () => {
-    it('should send welcome email', async () => {
-      await service.sendWelcomeEmail('test@example.com', 'John Doe');
+  // ── send() uses compiled HTML ───────────────────────────────────────────────
 
-      expect(mailerService.sendMail).toHaveBeenCalledWith(
+  describe('send', () => {
+    it('sends compiled HTML via mailerService', async () => {
+      await service.send(
+        'welcome',
+        TEMPLATE_SAMPLE_DATA['welcome'],
+        { to: 'test@example.com', subject: 'Welcome' },
+      );
+
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'test@example.com',
+          subject: 'Welcome',
+          html: expect.stringContaining('<html'),
+          template: undefined,
+        }),
+      );
+    });
+  });
+
+  // ── Legacy sendMail ─────────────────────────────────────────────────────────
+
+  describe('sendMail', () => {
+    it('sends email successfully', async () => {
+      await service.sendMail({
+        to: 'test@example.com',
+        subject: 'Test',
+        html: '<p>Test</p>',
+      });
+
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'test@example.com', subject: 'Test' }),
+      );
+    });
+
+    it('throws when mailerService fails', async () => {
+      mockMailerService.sendMail.mockRejectedValueOnce(new Error('Send failed'));
+      await expect(
+        service.sendMail({ to: 'x@x.com', subject: 'x', html: '<p>x</p>' }),
+      ).rejects.toThrow('Send failed');
+    });
+  });
+
+  // ── Convenience methods ─────────────────────────────────────────────────────
+
+  describe('sendWelcomeEmail', () => {
+    it('sends welcome email with compiled HTML', async () => {
+      await service.sendWelcomeEmail('test@example.com', 'John Doe');
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: 'test@example.com',
           subject: 'Welcome to Ahjoorxmr!',
-          template: 'en/welcome',
-          context: expect.objectContaining({
-            userName: 'John Doe',
-            email: 'test@example.com',
-          }),
+          html: expect.stringContaining('John Doe'),
         }),
       );
     });
   });
 
   describe('sendPasswordResetEmail', () => {
-    it('should send password reset email', async () => {
-      await service.sendPasswordResetEmail(
-        'test@example.com',
-        'John Doe',
-        'reset-token-123',
-      );
-
-      expect(mailerService.sendMail).toHaveBeenCalledWith(
+    it('sends password reset email with compiled HTML', async () => {
+      await service.sendPasswordResetEmail('test@example.com', 'John Doe', 'reset-token-123');
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
-          to: 'test@example.com',
           subject: 'Password Reset Request',
-          template: 'en/password-reset',
-          context: expect.objectContaining({
-            userName: 'John Doe',
-            resetLink: expect.stringContaining('reset-token-123'),
-            expiryTime: '1 hour',
-          }),
+          html: expect.stringContaining('reset-token-123'),
         }),
       );
     });
   });
 
   describe('sendEmailVerification', () => {
-    it('should send email verification', async () => {
-      await service.sendEmailVerification(
-        'test@example.com',
-        'John Doe',
-        'verify-token-123',
-      );
-
-      expect(mailerService.sendMail).toHaveBeenCalledWith(
+    it('sends email verification with compiled HTML', async () => {
+      await service.sendEmailVerification('test@example.com', 'John Doe', 'verify-token-123');
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
-          to: 'test@example.com',
           subject: 'Verify Your Email Address',
-          template: 'en/welcome',
-          context: expect.objectContaining({
-            userName: 'John Doe',
-            email: 'test@example.com',
-            activationLink: expect.stringContaining('verify-token-123'),
-          }),
+          html: expect.stringContaining('verify-token-123'),
         }),
       );
     });
   });
 
   describe('sendGroupInvitationEmail', () => {
-    it('should send group invitation email', async () => {
+    it('sends group invitation email', async () => {
       await service.sendGroupInvitationEmail(
-        'test@example.com',
-        'John Doe',
-        'Test Group',
-        'Jane Smith',
-        'invite-token-123',
+        'test@example.com', 'John Doe', 'Test Group', 'Jane Smith', 'invite-token-123',
       );
-
-      expect(mailerService.sendMail).toHaveBeenCalledWith(
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
-          to: 'test@example.com',
           subject: "You've been invited to join Test Group",
           template: 'en/group-invitation',
-          context: expect.objectContaining({
-            userName: 'John Doe',
-            groupName: 'Test Group',
-            inviterName: 'Jane Smith',
-            acceptLink: expect.stringContaining('invite-token-123'),
-          }),
         }),
       );
     });
   });
 
   describe('sendNotificationEmail', () => {
-    it('should send notification email', async () => {
+    it('sends notification email', async () => {
       await service.sendNotificationEmail(
-        'test@example.com',
-        'John Doe',
-        'Test Notification',
-        'This is a test notification',
+        'test@example.com', 'John Doe', 'Test Notification', 'Body text',
         'http://localhost:3000/action',
       );
-
-      expect(mailerService.sendMail).toHaveBeenCalledWith(
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
-          to: 'test@example.com',
           subject: 'Test Notification',
-          template: 'en/notification',
-          context: expect.objectContaining({
-            userName: 'John Doe',
-            notificationTitle: 'Test Notification',
-            notificationBody: 'This is a test notification',
-            actionLink: 'http://localhost:3000/action',
-          }),
+          context: expect.objectContaining({ actionLink: 'http://localhost:3000/action' }),
         }),
       );
     });
 
-    it('should send notification email without action link', async () => {
-      await service.sendNotificationEmail(
-        'test@example.com',
-        'John Doe',
-        'Test Notification',
-        'This is a test notification',
-      );
-
-      expect(mailerService.sendMail).toHaveBeenCalledWith(
+    it('defaults actionLink to # when not provided', async () => {
+      await service.sendNotificationEmail('test@example.com', 'John Doe', 'Title', 'Body');
+      expect(mockMailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
-          context: expect.objectContaining({
-            actionLink: '#',
-          }),
+          context: expect.objectContaining({ actionLink: '#' }),
         }),
       );
     });

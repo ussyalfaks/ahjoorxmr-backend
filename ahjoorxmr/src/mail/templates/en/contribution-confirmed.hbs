@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+  .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 8px; padding: 32px; }
+  .amount { font-size: 28px; font-weight: bold; color: #1d4ed8; }
+  .footer { margin-top: 32px; font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Contribution Confirmed</h1>
+    <p>Hi {{userName}}, your contribution to group <strong>{{groupName}}</strong> has been confirmed.</p>
+    <p class="amount">{{currency}} {{amount}}</p>
+    <p>Round: {{roundNumber}} &bull; Date: {{contributionDate}}</p>
+    <div class="footer">Thank you for contributing on time!</div>
+  </div>
+</body>
+</html>

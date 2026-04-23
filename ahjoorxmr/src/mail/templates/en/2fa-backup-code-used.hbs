@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+  .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 8px; padding: 32px; }
+  .alert { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 4px; }
+  .footer { margin-top: 32px; font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Backup Code Used</h1>
+    <p>Hi {{userName}},</p>
+    <div class="alert">A two-factor authentication backup code was used to sign in to your account on {{usedAt}}.</div>
+    <p>Remaining backup codes: <strong>{{remainingCodes}}</strong>. Generate new codes if you are running low.</p>
+    <div class="footer">If this was not you, secure your account immediately.</div>
+  </div>
+</body>
+</html>

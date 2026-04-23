@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+  .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 8px; padding: 32px; }
+  .amount { font-size: 32px; font-weight: bold; color: #065f46; }
+  .footer { margin-top: 32px; font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Payout Received</h1>
+    <p>Hi {{userName}}, you have received a payout from group <strong>{{groupName}}</strong>.</p>
+    <p class="amount">{{currency}} {{amount}}</p>
+    <p>Transaction ID: <code>{{transactionId}}</code></p>
+    <p>Date: {{payoutDate}}</p>
+    <div class="footer">Thank you for being part of Ahjoorxmr.</div>
+  </div>
+</body>
+</html>

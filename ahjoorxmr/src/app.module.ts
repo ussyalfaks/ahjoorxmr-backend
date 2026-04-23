@@ -37,6 +37,7 @@ import { SeedModule } from './database/seeds/seed.module';
 import { DatabasePerformanceModule } from './database/database-performance.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { CommonModule } from './common/common.module';
+import { MailModule } from './mail/mail.module';
 import { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
@@ -109,6 +110,7 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     DatabasePerformanceModule,
     FeatureFlagsModule,
     CommonModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [
