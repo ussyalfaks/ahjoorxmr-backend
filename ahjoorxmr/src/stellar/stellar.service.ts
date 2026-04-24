@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   HttpException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   Inject,
@@ -10,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import * as SorobanRpc from '@stellar/stellar-sdk/rpc';
+import { ContractStateGuard } from './contract-state-guard.service';
 import type { Group } from '../groups/entities/group.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
 import type { ContractInvocationResult } from './contract-invocation.types';
@@ -58,6 +60,8 @@ export class StellarService {
   constructor(
     private readonly configService: ConfigService,
     private readonly logger: WinstonLogger,
+    @Inject(forwardRef(() => ContractStateGuard))
+    private readonly contractStateGuard: ContractStateGuard,
     @Inject(forwardRef(() => MetricsService))
     private readonly metricsService: MetricsService,
   ) {
@@ -114,6 +118,21 @@ export class StellarService {
     }
 
     this.validateConfiguration();
+
+    // Perform state validation before submission
+    try {
+      await this.contractStateGuard.validatePreconditions(
+        contractAddress,
+        'disburse_payout',
+        recipientWallet,
+        amount,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`Precondition validation failed for disbursePayout: ${error.message}`);
+    }
 
     try {
       // Build and submit the disburse_payout contract call
@@ -407,7 +426,63 @@ export class StellarService {
     return undefined;
   }
 
-  private async invokeContractMethod(
+  public async simulateCall(
+    contractAddress: string,
+    method: string,
+    ...args: any[]
+  ): Promise<ContractInvocationResult & { minResourceFee: string }> {
+    this.validateConfiguration();
+
+    const sourceAccount = new (StellarSdk as any).Account(
+      (StellarSdk as any).Keypair.random().publicKey(),
+      '0',
+    );
+
+    let operation: any;
+    try {
+      const contract = new (StellarSdk as any).Contract(contractAddress);
+      operation = contract.call(method, ...args.map(arg => {
+          if (typeof arg === 'string' && (arg.startsWith('G') || arg.startsWith('C'))) {
+              return (StellarSdk as any).nativeToScVal(arg, { type: 'address' });
+          }
+          if (typeof arg === 'bigint' || typeof arg === 'number') {
+              return (StellarSdk as any).nativeToScVal(BigInt(arg), { type: 'i128' });
+          }
+          return (StellarSdk as any).nativeToScVal(arg);
+      }));
+    } catch (err) {
+      this.logger.error(`Failed to build operation for simulation: ${err.message}`);
+      throw new BadRequestException(`Invalid contract call parameters: ${err.message}`);
+    }
+
+    const tx = new (StellarSdk as any).TransactionBuilder(sourceAccount, {
+      fee: '100',
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(operation)
+      .setTimeout(30)
+      .build();
+
+    const preparedTx = await this.server.prepareTransaction(tx);
+    const simulation = await this.server.simulateTransaction(preparedTx);
+
+    if (isSimulateTransactionErrorResponse(simulation)) {
+      throw new Error(formatSimulationError(simulation));
+    }
+
+    const nativeValue = this.parseNativeFromSimulation(simulation);
+    const rawResultXdr = this.extractSimulationResultXdr(simulation);
+
+    return {
+      nativeValue,
+      rawResultXdr,
+      simulationLatencyMs: 0, // Simplified for this wrapper
+      attempts: 1,
+      minResourceFee: preparedTx.fee,
+    };
+  }
+
+  public async invokeContractMethod(
     contractAddress: string,
     method: string,
   ): Promise<ContractInvocationResult> {
