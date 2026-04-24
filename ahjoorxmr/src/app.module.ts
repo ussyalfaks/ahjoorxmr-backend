@@ -40,6 +40,10 @@ import { CommonModule } from './common/common.module';
 import { MailModule } from './mail/mail.module';
 import { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { ReplicaModule } from './database/replica.module';
+import { DatabaseRoutingModule } from './database/database-routing.module';
+import { ReadReplicaInterceptor } from './common/interceptors/read-replica.interceptor';
+import { ReadQueryRunner } from './database/read-query-runner';
 
 @Module({
   imports: [
@@ -49,8 +53,9 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
       envFilePath: '.env',
     }),
 
-    // TypeORM configuration with PostgreSQL
+    // TypeORM configuration with PostgreSQL (Primary)
     TypeOrmModule.forRootAsync({
+      name: 'primary',
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const isDevelopment =
@@ -90,6 +95,10 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
       },
       inject: [ConfigService],
     }),
+
+    // Replica and Routing Modules
+    ReplicaModule,
+    DatabaseRoutingModule,
 
     // RedisModule for caching and session management
     RedisModule,
@@ -132,6 +141,11 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
       provide: APP_INTERCEPTOR,
       useClass: SlowRequestInterceptor,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ReadReplicaInterceptor,
+    },
+    ReadQueryRunner,
   ],
 })
 export class AppModule implements NestModule {

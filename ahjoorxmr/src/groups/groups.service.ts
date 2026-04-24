@@ -17,6 +17,8 @@ import { NotificationsService } from '../notification/notifications.service';
 import { NotificationType } from '../notification/notification-type.enum';
 import { StellarService } from '../stellar/stellar.service';
 
+import { UseReadReplica } from '../common/decorators/read-replica.decorator';
+
 /**
  * Service responsible for managing ROSCA group operations.
  * Handles business logic for creating, reading, and updating groups.
@@ -104,6 +106,7 @@ export class GroupsService {
    * @param filter - Optional filter: 'stale' to return only stale groups
    * @returns Paginated result with data, total count, page, and limit
    */
+  @UseReadReplica()
   async findAll(
     page: number = 1,
     limit: number = 10,

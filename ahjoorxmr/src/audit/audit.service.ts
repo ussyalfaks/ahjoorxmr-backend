@@ -7,6 +7,7 @@ import {
   PaginatedAuditLogResponseDto,
   AuditLogResponseDto,
 } from './dto/audit-log-response.dto';
+import { UseReadReplica } from '../common/decorators/read-replica.decorator';
 
 @Injectable()
 export class AuditService {
@@ -27,6 +28,10 @@ export class AuditService {
     }
   }
 
+   * @param query - The filter and pagination data
+   * @returns Paginated result
+   */
+  @UseReadReplica()
   async findAll(
     query: AuditLogQueryDto,
   ): Promise<PaginatedAuditLogResponseDto> {

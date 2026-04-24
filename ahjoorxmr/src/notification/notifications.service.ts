@@ -14,6 +14,7 @@ import {
   NotifyDto,
   CreateNotificationDto,
 } from './notifications.dto';
+import { UseReadReplica } from '../common/decorators/read-replica.decorator';
 
 export interface PaginatedResult<T> {
   data: T[];
@@ -117,6 +118,7 @@ export class NotificationsService {
     }
   }
 
+  @UseReadReplica()
   async findAll(
     userId: string,
     query: PaginateNotificationsDto,
