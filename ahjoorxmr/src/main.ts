@@ -10,6 +10,7 @@ import { WinstonLogger } from './common/logger/winston.logger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new WinstonLogger(),
+    rawBody: true, // Required for HMAC webhook signature validation
   });
 
   // Global pipes

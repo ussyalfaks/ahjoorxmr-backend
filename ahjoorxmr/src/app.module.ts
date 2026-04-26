@@ -8,21 +8,16 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { MembershipsModule } from './memberships/memberships.module';
 import { ContributionsModule } from './contributions/contributions.module';
+import { KycModule } from './kyc/kyc.module';
 import { Membership } from './memberships/entities/membership.entity';
 import { Group } from './groups/entities/group.entity';
 import { User } from './users/entities/user.entity';
 import { Contribution } from './contributions/entities/contribution.entity';
+import { KycDocument } from './kyc/entities/kyc-document.entity';
+import { AuditLog } from './kyc/entities/audit-log.entity';
 
 @Module({
   imports: [
-    // TypeORM configuration with SQLite for development
-    // For production, replace with PostgreSQL configuration using environment variables
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: ':memory:', // In-memory database for development
-      entities: [Membership, Group, User, Contribution],
-      synchronize: true, // Auto-create tables (disable in production)
-      logging: false,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -39,9 +34,9 @@ import { Contribution } from './contributions/entities/contribution.entity';
           username: configService.get<string>('DB_USERNAME') || 'postgres',
           password: configService.get<string>('DB_PASSWORD') || 'postgres',
           database: configService.get<string>('DB_NAME') || 'ahjoorxmr',
-          entities: [Membership, Group, User],
-          synchronize: isDevelopment, // Auto-create tables only in development
-          logging: isDevelopment, // Enable logging only in development
+          entities: [Membership, Group, User, Contribution, KycDocument, AuditLog],
+          synchronize: isDevelopment,
+          logging: isDevelopment,
         };
       },
       inject: [ConfigService],
@@ -51,6 +46,7 @@ import { Contribution } from './contributions/entities/contribution.entity';
     UsersModule,
     MembershipsModule,
     ContributionsModule,
+    KycModule,
   ],
   controllers: [AppController],
   providers: [AppService],
