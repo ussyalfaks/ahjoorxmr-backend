@@ -7,4 +7,6 @@ export enum NotificationType {
   MEMBER_REMOVED = 'member_removed',
   KYC_APPROVED = 'kyc_approved',
   KYC_DECLINED = 'kyc_declined',
+  TWO_FA_BACKUP_CODE_USED = 'two_fa_backup_code_used',
+  TWO_FA_BACKUP_CODES_EXHAUSTED = 'two_fa_backup_codes_exhausted',
 }
