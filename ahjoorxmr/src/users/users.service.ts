@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { UserRepository } from './repositories/user.repository';
 import { User } from './entities/user.entity';
 import { TokenVersionCacheService } from '../common/redis/token-version-cache.service';
+import { NotificationPreferenceService } from '../notification/notification-preference.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly userRepository: UserRepository,
     private readonly tokenVersionCache: TokenVersionCacheService,
+    private readonly notificationPrefService: NotificationPreferenceService,
   ) {}
 
   async findById(id: string): Promise<User> {
@@ -28,7 +30,10 @@ export class UsersService {
 
   async create(userData: Partial<User>): Promise<User> {
     const user = this.userRepository.create(userData);
-    return this.userRepository.save(user);
+    const saved = await this.userRepository.save(user);
+    // Seed default notification preferences for new users
+    await this.notificationPrefService.seedForUser(saved.id).catch(() => {});
+    return saved;
   }
 
   async updateRefreshToken(

@@ -8,11 +8,13 @@ import { AdminUsersController } from './admin-users.controller';
 import { GdprModule } from './gdpr.module';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { ProfileCompletenessService } from './services/profile-completeness.service';
+import { NotificationPreference } from '../notification/notification-preference.entity';
+import { NotificationPreferenceService } from '../notification/notification-preference.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User]), GdprModule, ApiKeysModule],
+  imports: [TypeOrmModule.forFeature([User, NotificationPreference]), GdprModule, ApiKeysModule],
   controllers: [UsersController, AdminUsersController],
-  providers: [UserRepository, UsersService, ProfileCompletenessService],
+  providers: [UserRepository, UsersService, ProfileCompletenessService, NotificationPreferenceService],
   exports: [UserRepository, UsersService, ProfileCompletenessService, TypeOrmModule],
 })
 export class UsersModule { }

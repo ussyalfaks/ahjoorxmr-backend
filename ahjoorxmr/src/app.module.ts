@@ -53,6 +53,7 @@ import { WebhookModule } from './webhooks/webhook.module';
 import { AdminModule } from './admin/admin.module';
 import { PenaltiesModule } from './penalties/penalties.module';
 import { Penalty } from './penalties/entities/penalty.entity';
+import { NotificationPreference } from './notification/notification-preference.entity';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { Penalty } from './penalties/entities/penalty.entity';
             ApiKey,
             GroupInvite,
             Penalty,
+            NotificationPreference,
           ],
           synchronize: isDevelopment, // Auto-create tables only in development
           logging: isDevelopment, // Enable logging only in development

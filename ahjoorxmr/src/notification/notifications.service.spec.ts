@@ -2,10 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { MailerService } from '@nestjs-modules/mailer';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
-import { NotificationsService } from '../../src/notifications/notifications.service';
-import { Notification } from '../../src/notifications/entities/notification.entity';
-import { NotificationType } from '../../src/notifications/enums/notification-type.enum';
-import { NotifyDto } from '../../src/notifications/dto/notifications.dto';
+import { NotificationsService } from './notifications.service';
+import { Notification } from './notification.entity';
+import { NotificationType } from './notification-type.enum';
+import { NotifyDto } from './notifications.dto';
+import { NotificationPreferenceService } from './notification-preference.service';
 
 const mockNotification = (): Notification => ({
   id: 'uuid-1',
@@ -15,6 +16,7 @@ const mockNotification = (): Notification => ({
   body: 'A new round has started.',
   isRead: false,
   metadata: {},
+  idempotencyKey: null,
   createdAt: new Date('2024-01-01'),
 });
 
@@ -34,17 +36,33 @@ describe('NotificationsService', () => {
     sendMail: jest.fn(),
   };
 
+  const mockRedis = {
+    getClient: jest.fn().mockReturnValue({ publish: jest.fn().mockResolvedValue(1) }),
+  };
+
+  const mockGateway = {
+    emitNotification: jest.fn(),
+  };
+
+  const mockPrefService = {
+    getChannelPreference: jest.fn().mockResolvedValue({ inApp: true, email: true, push: true }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
         { provide: getRepositoryToken(Notification), useValue: mockRepo },
         { provide: MailerService, useValue: mockMailer },
+        { provide: 'RedisService', useValue: mockRedis },
+        { provide: 'NotificationsGateway', useValue: mockGateway },
+        { provide: NotificationPreferenceService, useValue: mockPrefService },
       ],
     }).compile();
 
     service = module.get<NotificationsService>(NotificationsService);
     jest.clearAllMocks();
+    mockPrefService.getChannelPreference.mockResolvedValue({ inApp: true, email: true, push: true });
   });
 
   // ─── notify() ─────────────────────────────────────────────────────────────
@@ -75,6 +93,7 @@ describe('NotificationsService', () => {
       const created = mockNotification();
       mockRepo.create.mockReturnValue(created);
       mockRepo.save.mockResolvedValue(created);
+      mockPrefService.getChannelPreference.mockResolvedValue({ inApp: true, email: true, push: true });
 
       let emailSent = false;
       mockMailer.sendMail.mockImplementation(
@@ -195,6 +214,105 @@ describe('NotificationsService', () => {
       await Promise.resolve();
       // No uncaught rejection
       jest.useRealTimers();
+    });
+  });
+
+  // ─── Preference-gating ────────────────────────────────────────────────────
+
+  describe('notify() with preferences', () => {
+    const dto: NotifyDto = {
+      userId: 'user-1',
+      type: NotificationType.ROUND_OPENED,
+      title: 'Round Opened',
+      body: 'Your round has started.',
+      sendEmail: true,
+      emailTo: 'user@example.com',
+    };
+
+    it('skips in-app insert when inApp preference is disabled', async () => {
+      mockPrefService.getChannelPreference.mockResolvedValue({ inApp: false, email: true, push: true });
+
+      const result = await service.notify(dto);
+
+      expect(mockRepo.create).not.toHaveBeenCalled();
+      expect(mockRepo.save).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+
+    it('skips email when email preference is disabled', async () => {
+      jest.useFakeTimers();
+      const created = mockNotification();
+      mockRepo.create.mockReturnValue(created);
+      mockRepo.save.mockResolvedValue(created);
+      mockPrefService.getChannelPreference.mockResolvedValue({ inApp: true, email: false, push: true });
+
+      await service.notify(dto);
+      jest.runAllImmediates();
+      await Promise.resolve();
+
+      expect(mockMailer.sendMail).not.toHaveBeenCalled();
+      jest.useRealTimers();
+    });
+
+    it('sends email when both inApp and email are enabled', async () => {
+      jest.useFakeTimers();
+      const created = mockNotification();
+      mockRepo.create.mockReturnValue(created);
+      mockRepo.save.mockResolvedValue(created);
+      mockPrefService.getChannelPreference.mockResolvedValue({ inApp: true, email: true, push: true });
+      mockMailer.sendMail.mockResolvedValue({});
+
+      await service.notify(dto);
+      jest.runAllImmediates();
+      await Promise.resolve();
+
+      expect(mockRepo.save).toHaveBeenCalled();
+      expect(mockMailer.sendMail).toHaveBeenCalled();
+      jest.useRealTimers();
+    });
+  });
+
+  describe('notifyBatch() with preferences', () => {
+    it('skips in-app insert for users with inApp disabled', async () => {
+      mockPrefService.getChannelPreference.mockResolvedValue({ inApp: false, email: true, push: true });
+      mockRepo.createQueryBuilder = jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      }));
+
+      const result = await service.notifyBatch([
+        { userId: 'user-1', type: NotificationType.ROUND_OPENED, title: 'T', body: 'B' },
+      ]);
+
+      expect(mockRepo.save).not.toHaveBeenCalled();
+      expect(result).toHaveLength(0);
+    });
+
+    it('only inserts notifications for users with inApp enabled', async () => {
+      mockPrefService.getChannelPreference
+        .mockResolvedValueOnce({ inApp: true, email: true, push: true })  // user-1
+        .mockResolvedValueOnce({ inApp: false, email: true, push: true }); // user-2
+
+      mockRepo.createQueryBuilder = jest.fn(() => ({
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+      }));
+      mockRepo.create.mockImplementation((d) => d);
+      mockRepo.save.mockImplementation((arr) => Promise.resolve(arr));
+
+      const result = await service.notifyBatch([
+        { userId: 'user-1', type: NotificationType.ROUND_OPENED, title: 'T', body: 'B' },
+        { userId: 'user-2', type: NotificationType.ROUND_OPENED, title: 'T', body: 'B' },
+      ]);
+
+      expect(mockRepo.save).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ userId: 'user-1' })]),
+      );
+      expect(result).toHaveLength(1);
     });
   });
 

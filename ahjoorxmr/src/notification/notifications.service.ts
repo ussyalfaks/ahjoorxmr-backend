@@ -19,6 +19,7 @@ import {
 import { UseReadReplica } from '../common/decorators/read-replica.decorator';
 import { RedisService } from '../common/redis/redis.service';
 import { NotificationsGateway } from './notifications.gateway';
+import { NotificationPreferenceService } from './notification-preference.service';
 
 export interface PaginatedResult<T> {
   data: T[];
@@ -45,13 +46,29 @@ export class NotificationsService {
     private readonly redisService: RedisService,
     @Inject(forwardRef(() => NotificationsGateway))
     private readonly gateway: NotificationsGateway,
+    private readonly prefService: NotificationPreferenceService,
   ) {}
 
   /**
    * Core notify method: creates a DB record and optionally queues an email.
    * Email sending is always asynchronous — it never blocks the caller.
    */
-  async notify(dto: NotifyDto): Promise<Notification> {
+  async notify(dto: NotifyDto): Promise<Notification | null> {
+    const prefs = await this.prefService.getChannelPreference(dto.userId, dto.type);
+
+    if (!prefs.inApp) {
+      this.logger.debug(`Skipping in-app notification for user ${dto.userId} [${dto.type}]: disabled`);
+      // Still send email if enabled and requested
+      if (prefs.email && dto.sendEmail && dto.emailTo) {
+        setImmediate(() =>
+          this.sendEmail(dto).catch((err) =>
+            this.logger.error(`Failed to send email [${dto.type}]: ${err.message}`, err.stack),
+          ),
+        );
+      }
+      return null;
+    }
+
     const notification = this.notificationRepo.create({
       userId: dto.userId,
       type: dto.type,
@@ -72,7 +89,7 @@ export class NotificationsService {
     // Push via WebSocket immediately after persisting
     this.gateway.emitNotification(dto.userId, saved);
 
-    if (dto.sendEmail && dto.emailTo) {
+    if (prefs.email && dto.sendEmail && dto.emailTo) {
       setImmediate(() =>
         this.sendEmail(dto).catch((err) => {
           this.logger.error(
@@ -113,7 +130,21 @@ export class NotificationsService {
       return [];
     }
 
-    const entities = toInsert.map((dto) =>
+    // Filter out notifications where the user has disabled in-app channel
+    const prefChecked = await Promise.all(
+      toInsert.map(async (dto) => {
+        const prefs = await this.prefService.getChannelPreference(dto.userId, dto.type);
+        return prefs.inApp ? dto : null;
+      }),
+    );
+    const allowed = prefChecked.filter((d): d is CreateNotificationDto => d !== null);
+
+    if (allowed.length === 0) {
+      this.logger.debug('All batch notifications skipped due to user preferences');
+      return [];
+    }
+
+    const entities = allowed.map((dto) =>
       this.notificationRepo.create({
         userId: dto.userId,
         type: dto.type,

@@ -6,14 +6,20 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import * as path from 'path';
 import { Notification } from './notification.entity';
+import { NotificationPreference } from './notification-preference.entity';
 import { NotificationsService } from './notifications.service';
+import { NotificationPreferenceService } from './notification-preference.service';
 import { NotificationsController } from './notifications.controller';
 import { SseAdminController } from './sse-admin.controller';
 import { NotificationsGateway } from './notifications.gateway';
+import {
+  NotificationPreferenceController,
+  AdminNotificationPreferenceController,
+} from './notification-preference.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Notification]),
+    TypeOrmModule.forFeature([Notification, NotificationPreference]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
@@ -46,8 +52,18 @@ import { NotificationsGateway } from './notifications.gateway';
       inject: [ConfigService],
     }),
   ],
-  controllers: [NotificationsController, SseAdminController],
-  providers: [NotificationsService, NotificationsController, NotificationsGateway],
-  exports: [NotificationsService, NotificationsGateway],
+  controllers: [
+    NotificationsController,
+    SseAdminController,
+    NotificationPreferenceController,
+    AdminNotificationPreferenceController,
+  ],
+  providers: [
+    NotificationsService,
+    NotificationsController,
+    NotificationsGateway,
+    NotificationPreferenceService,
+  ],
+  exports: [NotificationsService, NotificationsGateway, NotificationPreferenceService],
 })
 export class NotificationsModule {}
