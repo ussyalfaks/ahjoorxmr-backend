@@ -33,6 +33,7 @@ import { GroupsService } from './groups.service';
 import { PayoutService } from './payout.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
+import { TransferAdminDto } from './dto/transfer-admin.dto';
 import {
   GroupResponseDto,
   PaginatedGroupsResponseDto,
@@ -45,6 +46,10 @@ import { MembershipResponseDto } from '../memberships/dto/membership-response.dt
 import { AuditLog } from '../audit/decorators/audit-log.decorator';
 import { ErrorResponseDto } from '../common/dto/error-response.dto';
 import { PaginationQueryDto } from './dto/pagination-query.dto';
+import { ApiKeyAuthGuard } from '../api-keys/guards/api-key-auth.guard';
+import { KeyScopeGuard } from '../api-keys/guards/key-scope.guard';
+import { RequireKeyScope } from '../api-keys/decorators/require-key-scope.decorator';
+import { KeyScope } from '../api-keys/key-scope.enum';
 
 /**
  * Controller for managing ROSCA groups.
@@ -61,6 +66,7 @@ import { PaginationQueryDto } from './dto/pagination-query.dto';
 @ApiTags('Groups')
 @Controller('groups')
 @SetMetadata('deprecated', true)
+@UseGuards(KeyScopeGuard)
 export class GroupsController {
   constructor(
     private readonly groupsService: GroupsService,
@@ -76,7 +82,8 @@ export class GroupsController {
    * @returns The created group as GroupResponseDto with HTTP 201
    */
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ApiKeyAuthGuard)
+  @RequireKeyScope(KeyScope.WRITE_GROUPS)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -123,6 +130,8 @@ export class GroupsController {
    * @returns Paginated list of groups
    */
   @Get()
+  @UseGuards(ApiKeyAuthGuard)
+  @RequireKeyScope(KeyScope.READ_GROUPS)
   @ApiOperation({
     summary: 'Get all ROSCA groups with pagination',
     description: 'Returns a paginated list of all ROSCA groups',
@@ -171,6 +180,66 @@ export class GroupsController {
   }
 
   /**
+   * Transfers group admin ownership to another active member.
+   * Only the current group admin can transfer ownership.
+   *
+   * @param id - The UUID of the group
+   * @param transferAdminDto - Payload containing the new admin's wallet address
+   * @param req - Authenticated request object
+   * @returns The updated group
+   */
+  @Patch(':id/admin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Transfer group admin ownership',
+    description:
+      'Transfers group admin ownership to another active member. Requires current admin authorization.',
+  })
+  @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
+  @ApiBody({ type: TransferAdminDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin transferred successfully',
+    type: GroupResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Target user is not an active member',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Only the current admin can transfer ownership',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group not found',
+    type: ErrorResponseDto,
+  })
+  @AuditLog({ action: 'GROUP_ADMIN_TRANSFER', resource: 'GROUP' })
+  async transferAdmin(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() transferAdminDto: TransferAdminDto,
+    @Request() req: { user: { id: string; walletAddress: string } },
+  ): Promise<GroupResponseDto> {
+    const adminWallet = req.user.walletAddress || req.user.id;
+    const group = await this.groupsService.transferAdmin(
+      id,
+      adminWallet,
+      transferAdminDto,
+    );
+    return this.toGroupResponse(group);
+  }
+
+  /**
    * Returns all groups the authenticated user belongs to as a member.
    * MUST be declared before GET /:id to avoid route conflict.
    *
@@ -211,6 +280,8 @@ export class GroupsController {
    * @throws NotFoundException if the group doesn't exist
    */
   @Get(':id')
+  @UseGuards(ApiKeyAuthGuard)
+  @RequireKeyScope(KeyScope.READ_GROUPS)
   @ApiOperation({
     summary: 'Get group by ID',
     description: 'Returns full group details including members array',

@@ -18,6 +18,7 @@ import { GroupInviteService } from './invites/group-invite.service';
 import { GroupInviteController } from './invites/group-invite.controller';
 import { MailModule } from '../mail/mail.module';
 import { User } from '../users/entities/user.entity';
+import { AuditModule } from '../audit/audit.module';
 
 /**
  * GroupsModule manages ROSCA group entities in the database.
@@ -31,6 +32,7 @@ import { User } from '../users/entities/user.entity';
     StellarModule,
     QueueModule,
     MailModule,
+    AuditModule,
   ],
   controllers: [GroupsController, GroupsV2Controller, GroupInviteController],
   providers: [

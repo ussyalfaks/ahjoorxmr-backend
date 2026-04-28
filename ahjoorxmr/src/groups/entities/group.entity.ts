@@ -1,6 +1,7 @@
 import { Entity, Column, OneToMany, DeleteDateColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity';
 import { GroupStatus } from './group-status.enum';
+import { PayoutOrderStrategy } from './payout-order-strategy.enum';
 import { Membership } from '../../memberships/entities/membership.entity';
 
 /**
@@ -53,6 +54,13 @@ export class Group extends BaseEntity {
 
   @Column('int')
   totalRounds: number;
+
+  @Column({
+    type: 'enum',
+    enum: PayoutOrderStrategy,
+    default: PayoutOrderStrategy.SEQUENTIAL,
+  })
+  payoutOrderStrategy: PayoutOrderStrategy;
 
   @Column('int')
   minMembers: number;
