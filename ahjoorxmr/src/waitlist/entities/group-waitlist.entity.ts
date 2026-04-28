@@ -29,6 +29,9 @@ export class GroupWaitlist extends BaseEntity {
   @JoinColumn({ name: 'userId' })
   user: User;
 
+  @Column('varchar', { length: 255 })
+  walletAddress: string;
+
   @Column('int')
   position: number;
 

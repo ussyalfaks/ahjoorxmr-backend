@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MembershipsController } from './memberships.controller';
 import { MembershipsService } from './memberships.service';
@@ -19,7 +19,7 @@ import { WaitlistModule } from '../waitlist/waitlist.module';
   imports: [
     TypeOrmModule.forFeature([Membership, Group, User]),
     NotificationsModule,
-    WaitlistModule,
+    forwardRef(() => WaitlistModule),
   ],
   controllers: [MembershipsController],
   providers: [MembershipsService, WinstonLogger, JwtAuthGuard],

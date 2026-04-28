@@ -630,6 +630,17 @@ export class MembershipsService {
       metadata: { groupId, reason, adminId: requestingUserId },
     });
 
+    // A suspended member frees a slot — admit next from waitlist
+    setImmediate(() =>
+      this.waitlistService.admitNextFromWaitlist(groupId).catch((err) =>
+        this.logger.error(
+          `Failed to admit from waitlist after suspension in group ${groupId}: ${err.message}`,
+          err.stack,
+          'MembershipsService',
+        ),
+      ),
+    );
+
     this.logger.log(
       `Member ${targetUserId} suspended in group ${groupId} by ${requestingUserId}`,
       'MembershipsService',

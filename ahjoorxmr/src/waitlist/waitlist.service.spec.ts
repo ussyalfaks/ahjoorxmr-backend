@@ -17,24 +17,21 @@ import { NotificationsService } from '../../notification/notifications.service';
 import { WinstonLogger } from '../../common/logger/winston.logger';
 import { NotificationType } from '../../notification/notification-type.enum';
 
-const GROUP_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
-const USER_ID  = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
-const ADMIN_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const GROUP_ID   = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const USER_ID    = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+const ADMIN_ID   = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const WALLET     = 'GUSER_WALLET';
+const ADMIN_WALLET = 'GADMIN';
 
 const mockGroup = (overrides: Partial<Group> = {}): Group =>
-  ({
-    id: GROUP_ID,
-    name: 'Test Group',
-    maxMembers: 3,
-    adminWallet: 'GADMIN',
-    ...overrides,
-  } as Group);
+  ({ id: GROUP_ID, name: 'Test Group', maxMembers: 3, adminWallet: ADMIN_WALLET, ...overrides } as Group);
 
 const mockEntry = (overrides: Partial<GroupWaitlist> = {}): GroupWaitlist =>
   ({
     id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
     groupId: GROUP_ID,
     userId: USER_ID,
+    walletAddress: WALLET,
     position: 1,
     status: WaitlistStatus.WAITING,
     joinedWaitlistAt: new Date(),
@@ -48,7 +45,7 @@ const mockMembership = (overrides: Partial<Membership> = {}): Membership =>
     id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
     groupId: GROUP_ID,
     userId: ADMIN_ID,
-    walletAddress: 'GADMIN',
+    walletAddress: ADMIN_WALLET,
     payoutOrder: 0,
     status: MembershipStatus.ACTIVE,
     hasReceivedPayout: false,
@@ -79,20 +76,7 @@ describe('WaitlistService', () => {
     groupRepo = { findOne: jest.fn() };
     membershipRepo = { findOne: jest.fn(), count: jest.fn() };
     notificationsService = { notify: jest.fn().mockResolvedValue(null) };
-
-    // Default transaction mock: executes the callback with a manager that mirrors repos
-    dataSource = {
-      transaction: jest.fn().mockImplementation(async (cb) => {
-        const manager = {
-          findOne: jest.fn(),
-          count: jest.fn(),
-          create: jest.fn(),
-          save: jest.fn(),
-          createQueryBuilder: jest.fn(),
-        };
-        return cb(manager);
-      }),
-    };
+    dataSource = { transaction: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -115,24 +99,28 @@ describe('WaitlistService', () => {
   // ─── joinWaitlist ──────────────────────────────────────────────────────────
 
   describe('joinWaitlist', () => {
-    it('returns position when group is full and user is new', async () => {
+    it('returns position and stores walletAddress when group is full', async () => {
       groupRepo.findOne.mockResolvedValue(mockGroup());
       membershipRepo.findOne.mockResolvedValue(null);
       waitlistRepo.findOne.mockResolvedValue(null);
-      membershipRepo.count.mockResolvedValue(3); // at cap
+      membershipRepo.count.mockResolvedValue(3);
       waitlistRepo.count.mockResolvedValue(2);
       waitlistRepo.create.mockReturnValue(mockEntry({ position: 3 }));
       waitlistRepo.save.mockResolvedValue(mockEntry({ position: 3 }));
 
-      const result = await service.joinWaitlist(GROUP_ID, USER_ID);
+      const result = await service.joinWaitlist(GROUP_ID, USER_ID, WALLET);
+
       expect(result.position).toBe(3);
+      expect(waitlistRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ walletAddress: WALLET }),
+      );
     });
 
     it('throws ConflictException when user is already a member', async () => {
       groupRepo.findOne.mockResolvedValue(mockGroup());
       membershipRepo.findOne.mockResolvedValue(mockMembership({ userId: USER_ID }));
 
-      await expect(service.joinWaitlist(GROUP_ID, USER_ID)).rejects.toThrow(ConflictException);
+      await expect(service.joinWaitlist(GROUP_ID, USER_ID, WALLET)).rejects.toThrow(ConflictException);
     });
 
     it('throws ConflictException when user is already on the waitlist', async () => {
@@ -140,33 +128,33 @@ describe('WaitlistService', () => {
       membershipRepo.findOne.mockResolvedValue(null);
       waitlistRepo.findOne.mockResolvedValue(mockEntry());
 
-      await expect(service.joinWaitlist(GROUP_ID, USER_ID)).rejects.toThrow(ConflictException);
+      await expect(service.joinWaitlist(GROUP_ID, USER_ID, WALLET)).rejects.toThrow(ConflictException);
     });
 
     it('throws BadRequestException when group is not full', async () => {
       groupRepo.findOne.mockResolvedValue(mockGroup({ maxMembers: 5 }));
       membershipRepo.findOne.mockResolvedValue(null);
       waitlistRepo.findOne.mockResolvedValue(null);
-      membershipRepo.count.mockResolvedValue(3); // below cap
+      membershipRepo.count.mockResolvedValue(3);
 
-      await expect(service.joinWaitlist(GROUP_ID, USER_ID)).rejects.toThrow(BadRequestException);
+      await expect(service.joinWaitlist(GROUP_ID, USER_ID, WALLET)).rejects.toThrow(BadRequestException);
     });
 
-    it('throws BadRequestException when waitlist cap is reached', async () => {
+    it('enforces waitlist cap with clear error message', async () => {
       groupRepo.findOne.mockResolvedValue(mockGroup());
       membershipRepo.findOne.mockResolvedValue(null);
       waitlistRepo.findOne.mockResolvedValue(null);
-      membershipRepo.count.mockResolvedValue(3); // at cap
-      waitlistRepo.count.mockResolvedValue(50);  // waitlist full
+      membershipRepo.count.mockResolvedValue(3);
+      waitlistRepo.count.mockResolvedValue(50);
 
-      await expect(service.joinWaitlist(GROUP_ID, USER_ID)).rejects.toThrow(
+      await expect(service.joinWaitlist(GROUP_ID, USER_ID, WALLET)).rejects.toThrow(
         'Waitlist is full (max 50 users)',
       );
     });
 
     it('throws NotFoundException when group does not exist', async () => {
       groupRepo.findOne.mockResolvedValue(null);
-      await expect(service.joinWaitlist(GROUP_ID, USER_ID)).rejects.toThrow(NotFoundException);
+      await expect(service.joinWaitlist(GROUP_ID, USER_ID, WALLET)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -191,7 +179,29 @@ describe('WaitlistService', () => {
       expect(waitlistRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ status: WaitlistStatus.CANCELLED }),
       );
+      // Re-sequencing UPDATE was called
       expect(qb.execute).toHaveBeenCalled();
+    });
+
+    it('positions remain contiguous after cancellation (re-sequence called with correct params)', async () => {
+      const entry = mockEntry({ position: 1 });
+      waitlistRepo.findOne.mockResolvedValue(entry);
+      waitlistRepo.save.mockResolvedValue({ ...entry, status: WaitlistStatus.CANCELLED });
+
+      const qb = {
+        update: jest.fn().mockReturnThis(),
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 2 }),
+      };
+      waitlistRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.leaveWaitlist(GROUP_ID, USER_ID);
+
+      expect(qb.where).toHaveBeenCalledWith(
+        expect.stringContaining('position > :pos'),
+        expect.objectContaining({ pos: 1, status: WaitlistStatus.WAITING }),
+      );
     });
 
     it('throws NotFoundException when entry does not exist', async () => {
@@ -200,21 +210,38 @@ describe('WaitlistService', () => {
     });
   });
 
+  // ─── getMyPosition ─────────────────────────────────────────────────────────
+
+  describe('getMyPosition', () => {
+    it('returns position and status for a waiting user', async () => {
+      waitlistRepo.findOne.mockResolvedValue(mockEntry({ position: 3, status: WaitlistStatus.WAITING }));
+
+      const result = await service.getMyPosition(GROUP_ID, USER_ID);
+
+      expect(result.position).toBe(3);
+      expect(result.status).toBe(WaitlistStatus.WAITING);
+    });
+
+    it('throws NotFoundException when user has no entry', async () => {
+      waitlistRepo.findOne.mockResolvedValue(null);
+      await expect(service.getMyPosition(GROUP_ID, USER_ID)).rejects.toThrow(NotFoundException);
+    });
+  });
+
   // ─── getWaitlist ───────────────────────────────────────────────────────────
 
   describe('getWaitlist', () => {
     it('returns ordered waitlist for group admin', async () => {
-      groupRepo.findOne.mockResolvedValue(mockGroup({ adminWallet: 'GADMIN' }));
-      membershipRepo.findOne.mockResolvedValue(mockMembership({ userId: ADMIN_ID, walletAddress: 'GADMIN' }));
-      const entries = [mockEntry({ position: 1 }), mockEntry({ position: 2, userId: 'other' })];
-      waitlistRepo.find.mockResolvedValue(entries);
+      groupRepo.findOne.mockResolvedValue(mockGroup());
+      membershipRepo.findOne.mockResolvedValue(mockMembership({ userId: ADMIN_ID, walletAddress: ADMIN_WALLET }));
+      waitlistRepo.find.mockResolvedValue([mockEntry({ position: 1 }), mockEntry({ position: 2 })]);
 
       const result = await service.getWaitlist(GROUP_ID, ADMIN_ID);
       expect(result).toHaveLength(2);
     });
 
     it('throws ForbiddenException for non-admin member', async () => {
-      groupRepo.findOne.mockResolvedValue(mockGroup({ adminWallet: 'GADMIN' }));
+      groupRepo.findOne.mockResolvedValue(mockGroup());
       membershipRepo.findOne.mockResolvedValue(mockMembership({ walletAddress: 'GOTHER' }));
 
       await expect(service.getWaitlist(GROUP_ID, ADMIN_ID)).rejects.toThrow(ForbiddenException);
@@ -231,30 +258,37 @@ describe('WaitlistService', () => {
   // ─── admitNextFromWaitlist ─────────────────────────────────────────────────
 
   describe('admitNextFromWaitlist', () => {
-    it('admits first WAITING user, creates membership, marks ADMITTED, sends notification', async () => {
-      const entry = mockEntry({ position: 1 });
-      const group = mockGroup();
+    const buildManager = (overrides: Partial<Record<string, jest.Mock>> = {}) => ({
+      findOne: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+      createQueryBuilder: jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue({ maxOrder: 1 }),
+      }),
+      ...overrides,
+    });
 
-      const manager = {
+    it('creates membership with stored walletAddress and marks entry ADMITTED', async () => {
+      const entry = mockEntry({ position: 1, walletAddress: WALLET });
+      const group = mockGroup();
+      const manager = buildManager({
         findOne: jest.fn()
-          .mockResolvedValueOnce(entry)   // GroupWaitlist
-          .mockResolvedValueOnce(group),  // Group
-        count: jest.fn().mockResolvedValue(2), // below maxMembers
-        create: jest.fn().mockReturnValue(mockMembership({ userId: USER_ID })),
+          .mockResolvedValueOnce(entry)
+          .mockResolvedValueOnce(group),
+        count: jest.fn().mockResolvedValue(2),
+        create: jest.fn().mockReturnValue(mockMembership({ userId: USER_ID, walletAddress: WALLET })),
         save: jest.fn().mockResolvedValue({}),
-        createQueryBuilder: jest.fn().mockReturnValue({
-          select: jest.fn().mockReturnThis(),
-          where: jest.fn().mockReturnThis(),
-          getRawOne: jest.fn().mockResolvedValue({ maxOrder: 1 }),
-        }),
-      };
+      });
       dataSource.transaction.mockImplementation((cb) => cb(manager));
 
       await service.admitNextFromWaitlist(GROUP_ID);
 
-      expect(manager.save).toHaveBeenCalledWith(
+      expect(manager.create).toHaveBeenCalledWith(
         Membership,
-        expect.objectContaining({ userId: USER_ID, status: MembershipStatus.ACTIVE }),
+        expect.objectContaining({ walletAddress: WALLET, userId: USER_ID, status: MembershipStatus.ACTIVE }),
       );
       expect(manager.save).toHaveBeenCalledWith(
         GroupWaitlist,
@@ -262,33 +296,48 @@ describe('WaitlistService', () => {
       );
     });
 
+    it('admission is atomic: both membership insert and waitlist update in one transaction', async () => {
+      const entry = mockEntry({ position: 1 });
+      const group = mockGroup();
+      const saveCalls: any[] = [];
+      const manager = buildManager({
+        findOne: jest.fn()
+          .mockResolvedValueOnce(entry)
+          .mockResolvedValueOnce(group),
+        count: jest.fn().mockResolvedValue(2),
+        create: jest.fn().mockReturnValue(mockMembership({ userId: USER_ID })),
+        save: jest.fn().mockImplementation((entity, data) => {
+          saveCalls.push({ entity, data });
+          return Promise.resolve(data);
+        }),
+      });
+      dataSource.transaction.mockImplementation((cb) => cb(manager));
+
+      await service.admitNextFromWaitlist(GROUP_ID);
+
+      // Both saves happened inside the same transaction callback
+      expect(saveCalls).toHaveLength(2);
+      expect(saveCalls[0].entity).toBe(Membership);
+      expect(saveCalls[1].entity).toBe(GroupWaitlist);
+    });
+
     it('does nothing when no WAITING entry exists', async () => {
-      const manager = {
-        findOne: jest.fn().mockResolvedValue(null),
-        count: jest.fn(),
-        create: jest.fn(),
-        save: jest.fn(),
-        createQueryBuilder: jest.fn(),
-      };
+      const manager = buildManager({ findOne: jest.fn().mockResolvedValue(null) });
       dataSource.transaction.mockImplementation((cb) => cb(manager));
 
       await service.admitNextFromWaitlist(GROUP_ID);
       expect(manager.save).not.toHaveBeenCalled();
     });
 
-    it('does nothing when group is still at capacity after removal race', async () => {
+    it('does nothing when group is still at capacity (race condition guard)', async () => {
       const entry = mockEntry();
       const group = mockGroup({ maxMembers: 3 });
-
-      const manager = {
+      const manager = buildManager({
         findOne: jest.fn()
           .mockResolvedValueOnce(entry)
           .mockResolvedValueOnce(group),
-        count: jest.fn().mockResolvedValue(3), // still full
-        create: jest.fn(),
-        save: jest.fn(),
-        createQueryBuilder: jest.fn(),
-      };
+        count: jest.fn().mockResolvedValue(3),
+      });
       dataSource.transaction.mockImplementation((cb) => cb(manager));
 
       await service.admitNextFromWaitlist(GROUP_ID);
@@ -299,20 +348,14 @@ describe('WaitlistService', () => {
       jest.useFakeTimers();
       const entry = mockEntry({ position: 1 });
       const group = mockGroup();
-
-      const manager = {
+      const manager = buildManager({
         findOne: jest.fn()
           .mockResolvedValueOnce(entry)
           .mockResolvedValueOnce(group),
         count: jest.fn().mockResolvedValue(2),
         create: jest.fn().mockReturnValue(mockMembership({ userId: USER_ID })),
         save: jest.fn().mockResolvedValue({}),
-        createQueryBuilder: jest.fn().mockReturnValue({
-          select: jest.fn().mockReturnThis(),
-          where: jest.fn().mockReturnThis(),
-          getRawOne: jest.fn().mockResolvedValue({ maxOrder: null }),
-        }),
-      };
+      });
       dataSource.transaction.mockImplementation((cb) => cb(manager));
 
       await service.admitNextFromWaitlist(GROUP_ID);

@@ -13,6 +13,7 @@ export class CreateGroupWaitlistTable1748100000000 implements MigrationInterface
         "updatedAt"        TIMESTAMP         NOT NULL DEFAULT now(),
         "groupId"          UUID              NOT NULL,
         "userId"           UUID              NOT NULL,
+        "walletAddress"    VARCHAR(255)      NOT NULL DEFAULT '',
         "position"         INTEGER           NOT NULL,
         "joinedWaitlistAt" TIMESTAMPTZ       NOT NULL DEFAULT NOW(),
         "status"           "group_waitlist_status_enum" NOT NULL DEFAULT 'WAITING',

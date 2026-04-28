@@ -35,7 +35,11 @@ export class WaitlistService {
     this.maxWaitlist = configService.get<number>('GROUP_MAX_WAITLIST', 50);
   }
 
-  async joinWaitlist(groupId: string, userId: string): Promise<{ position: number }> {
+  async joinWaitlist(
+    groupId: string,
+    userId: string,
+    walletAddress: string,
+  ): Promise<{ position: number }> {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
     if (!group) throw new NotFoundException('Group not found');
 
@@ -56,21 +60,23 @@ export class WaitlistService {
       where: { groupId, status: WaitlistStatus.WAITING },
     });
     if (waitlistCount >= this.maxWaitlist) {
-      throw new BadRequestException(
-        `Waitlist is full (max ${this.maxWaitlist} users)`,
-      );
+      throw new BadRequestException(`Waitlist is full (max ${this.maxWaitlist} users)`);
     }
 
     const position = waitlistCount + 1;
     const entry = this.waitlistRepo.create({
       groupId,
       userId,
+      walletAddress,
       position,
       status: WaitlistStatus.WAITING,
     });
     await this.waitlistRepo.save(entry);
 
-    this.logger.log(`User ${userId} joined waitlist for group ${groupId} at position ${position}`, 'WaitlistService');
+    this.logger.log(
+      `User ${userId} joined waitlist for group ${groupId} at position ${position}`,
+      'WaitlistService',
+    );
     return { position };
   }
 
@@ -84,7 +90,7 @@ export class WaitlistService {
     entry.status = WaitlistStatus.CANCELLED;
     await this.waitlistRepo.save(entry);
 
-    // Re-sequence positions for users behind the cancelled entry
+    // Re-sequence positions for users behind the cancelled entry in one UPDATE
     await this.waitlistRepo
       .createQueryBuilder()
       .update(GroupWaitlist)
@@ -99,10 +105,19 @@ export class WaitlistService {
     this.logger.log(`User ${userId} left waitlist for group ${groupId}`, 'WaitlistService');
   }
 
-  async getWaitlist(
+  async getMyPosition(
     groupId: string,
-    requestingUserId: string,
-  ): Promise<GroupWaitlist[]> {
+    userId: string,
+  ): Promise<{ position: number; status: WaitlistStatus }> {
+    const entry = await this.waitlistRepo.findOne({
+      where: { groupId, userId },
+      order: { createdAt: 'DESC' },
+    });
+    if (!entry) throw new NotFoundException('No waitlist entry found for this user');
+    return { position: entry.position, status: entry.status };
+  }
+
+  async getWaitlist(groupId: string, requestingUserId: string): Promise<GroupWaitlist[]> {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
     if (!group) throw new NotFoundException('Group not found');
 
@@ -122,9 +137,8 @@ export class WaitlistService {
   }
 
   /**
-   * Admits the first WAITING user from the waitlist into the group.
-   * Called atomically within a transaction when a member slot opens.
-   * The caller must pass an active QueryRunner transaction.
+   * Admits the first WAITING user from the waitlist into the group atomically.
+   * Uses a pessimistic write lock to prevent double-admission under concurrency.
    */
   async admitNextFromWaitlist(groupId: string): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
@@ -133,7 +147,6 @@ export class WaitlistService {
         order: { position: 'ASC' },
         lock: { mode: 'pessimistic_write' },
       });
-
       if (!next) return;
 
       const group = await manager.findOne(Group, { where: { id: groupId } });
@@ -142,7 +155,6 @@ export class WaitlistService {
       const memberCount = await manager.count(Membership, { where: { groupId } });
       if (memberCount >= group.maxMembers) return;
 
-      // Compute next payout order
       const result = await manager
         .createQueryBuilder(Membership, 'm')
         .select('MAX(m.payoutOrder)', 'maxOrder')
@@ -154,7 +166,7 @@ export class WaitlistService {
       const membership = manager.create(Membership, {
         groupId,
         userId: next.userId,
-        walletAddress: '',   // wallet address unknown at waitlist time; admin can update
+        walletAddress: next.walletAddress,
         payoutOrder,
         status: MembershipStatus.ACTIVE,
         hasReceivedPayout: false,
@@ -170,7 +182,6 @@ export class WaitlistService {
         'WaitlistService',
       );
 
-      // Notification is fire-and-forget outside the transaction
       setImmediate(() =>
         this.notificationsService
           .notify({
