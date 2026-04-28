@@ -17,6 +17,9 @@ import { CreateGroupDto } from '../dto/create-group.dto';
 import { UpdateGroupDto } from '../dto/update-group.dto';
 import { NotificationsService } from '../../notification/notifications.service';
 import { StellarService } from '../../stellar/stellar.service';
+import { AuditService } from '../../audit/audit.service';
+import { TransferAdminDto } from '../dto/transfer-admin.dto';
+import { ConfigService } from '@nestjs/config';
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -105,6 +108,7 @@ describe('GroupsService', () => {
   let logger: MockLogger;
   let notificationsService: Partial<NotificationsService>;
   let stellarService: Partial<StellarService>;
+  let auditService: Partial<AuditService>;
   let mockDataSource: Partial<DataSource>;
 
   beforeEach(async () => {
@@ -118,6 +122,9 @@ describe('GroupsService', () => {
     stellarService = {
       deployRoscaContract: jest.fn().mockResolvedValue('CFAKEADDRESS123'),
       disbursePayout: jest.fn().mockResolvedValue('TX_HASH_MOCK'),
+    };
+    auditService = {
+      createLog: jest.fn().mockResolvedValue({}),
     };
 
     // Default DataSource mock: transaction callback runs immediately
@@ -158,8 +165,18 @@ describe('GroupsService', () => {
           useValue: stellarService,
         },
         {
+          provide: AuditService,
+          useValue: auditService,
+        },
+        {
           provide: DataSource,
           useValue: mockDataSource,
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -1328,6 +1345,88 @@ describe('GroupsService', () => {
       expect(stellarService.getGroupState).toHaveBeenCalledWith(
         'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBSC4',
       );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // transferAdmin
+  // -------------------------------------------------------------------------
+
+  describe('transferAdmin', () => {
+    const groupId = 'group-123';
+    const currentAdminWallet = 'GADMIN';
+    const newAdminUserId = 'user-456';
+    const newAdminWallet = 'GNEWADMIN';
+
+    it('should transfer admin ownership successfully', async () => {
+      const mockGroup = createMockGroup({
+        id: groupId,
+        adminWallet: currentAdminWallet,
+        name: 'Test Group',
+      });
+      const mockMembership = createMockMembership({
+        groupId,
+        userId: newAdminUserId,
+        walletAddress: newAdminWallet,
+        status: MembershipStatus.ACTIVE,
+      });
+
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+      membershipRepository.findOne!.mockResolvedValue(mockMembership);
+      groupRepository.save!.mockResolvedValue({
+        ...mockGroup,
+        adminWallet: newAdminWallet,
+      });
+
+      const transferDto: TransferAdminDto = { newAdminUserId };
+      const result = await service.transferAdmin(
+        groupId,
+        currentAdminWallet,
+        transferDto,
+      );
+
+      expect(result.adminWallet).toBe(newAdminWallet);
+      expect(groupRepository.save).toHaveBeenCalled();
+      expect(auditService.createLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'GROUP_ADMIN_TRANSFER',
+          resource: 'Group',
+        }),
+      );
+      expect(notificationsService.notifyBatch).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException if group does not exist', async () => {
+      groupRepository.findOne!.mockResolvedValue(null);
+
+      await expect(
+        service.transferAdmin(groupId, currentAdminWallet, { newAdminUserId }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw ForbiddenException if requester is not the admin', async () => {
+      const mockGroup = createMockGroup({
+        id: groupId,
+        adminWallet: 'OTHER_ADMIN',
+      });
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+
+      await expect(
+        service.transferAdmin(groupId, currentAdminWallet, { newAdminUserId }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw BadRequestException if target user is not an active member', async () => {
+      const mockGroup = createMockGroup({
+        id: groupId,
+        adminWallet: currentAdminWallet,
+      });
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+      membershipRepository.findOne!.mockResolvedValue(null);
+
+      await expect(
+        service.transferAdmin(groupId, currentAdminWallet, { newAdminUserId }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });
