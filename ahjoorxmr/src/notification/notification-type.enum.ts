@@ -8,4 +8,8 @@ export enum NotificationType {
   MEMBER_REMOVED = 'member_removed',
   SYSTEM_ALERT = 'system_alert',
   KYC_SUBMITTED = 'kyc_submitted',
+  MEMBER_SUSPENDED = 'member_suspended',
+  MEMBER_REINSTATED = 'member_reinstated',
+  GROUP_ANNOUNCEMENT = 'group_announcement',
+  IMPERSONATION_REQUEST = 'impersonation_request',
 }
