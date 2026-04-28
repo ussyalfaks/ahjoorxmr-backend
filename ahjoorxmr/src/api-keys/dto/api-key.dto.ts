@@ -1,17 +1,23 @@
-import { IsString, IsArray, IsOptional, IsDateString, ArrayUnique } from 'class-validator';
+import { IsString, IsArray, IsOptional, IsDateString, ArrayUnique, IsEnum, IsNotEmpty } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { KeyScope } from '../key-scope.enum';
 
 export class CreateApiKeyDto {
   @ApiProperty({ example: 'Treasury Integration Key' })
   @IsString()
+  @IsNotEmpty()
   name: string;
 
-  @ApiPropertyOptional({ example: ['read:groups', 'read:contributions'] })
+  @ApiPropertyOptional({ 
+    example: [KeyScope.READ_GROUPS, KeyScope.READ_CONTRIBUTIONS],
+    enum: KeyScope,
+    isArray: true 
+  })
   @IsArray()
-  @IsString({ each: true })
+  @IsEnum(KeyScope, { each: true })
   @ArrayUnique()
   @IsOptional()
-  scopes?: string[];
+  scopes?: KeyScope[];
 
   @ApiPropertyOptional({ example: '2026-01-01T00:00:00.000Z' })
   @IsDateString()
