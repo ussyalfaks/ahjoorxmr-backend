@@ -9,6 +9,10 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import * as SorobanRpc from '@stellar/stellar-sdk/rpc';
 import { StellarService } from './stellar.service';
 import { WinstonLogger } from '../common/logger/winston.logger';
+import { RedisService } from '../common/redis/redis.service';
+import { WebhookService } from '../webhooks/webhook.service';
+import { ContractStateGuard } from './contract-state-guard.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 const mockServer = {
   prepareTransaction: jest.fn(),
@@ -408,7 +412,7 @@ const mockConfigService = {
     });
   });
 
-  describe('configuration handling', () => {
+   describe('configuration handling', () => {
     it('throws InternalServerErrorException when CONTRACT_ADDRESS is missing', async () => {
       mockConfigService.get.mockImplementation(
         (key: string, defaultValue?: string) => {
@@ -438,6 +442,287 @@ const mockConfigService = {
           'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
         ),
       ).rejects.toThrow(InternalServerErrorException);
+    });
+  });
+
+  describe('Fee Estimation & Transaction Submission', () => {
+    let service: StellarService;
+    let mockRedisService: Partial<RedisService>;
+    let mockWebhookService: Partial<WebhookService>;
+    let mockContractStateGuard: Partial<ContractStateGuard>;
+    let mockMetricsService: Partial<MetricsService>;
+
+    const mockConfigServiceWithFees = {
+      get: jest.fn((key: string, defaultValue?: any) => {
+        const values: Record<string, any> = {
+          STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
+          STELLAR_NETWORK: 'testnet',
+          STELLAR_NETWORK_PASSPHRASE: (StellarSdk as any).Networks.TESTNET,
+          CONTRACT_ADDRESS: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+          STELLAR_ISSUER_ACCOUNT: undefined, // skip balance check
+          STELLAR_MIN_BALANCE_ALERT_XLM: 5,
+          STELLAR_MAX_FEE_STROOPS: '500000',
+          STELLAR_FEE_BUFFER_PERCENT: '20',
+          STELLAR_DAILY_FEE_ALERT_XLM: '10',
+        };
+        return values[key] ?? defaultValue;
+      }),
+    };
+
+    beforeEach(async () => {
+      jest.clearAllMocks();
+      mockServer.prepareTransaction.mockResolvedValue({ prepared: true });
+      mockServer.simulateTransaction.mockResolvedValue({
+        result: { minResourceFee: '100000' }, // 0.001 XLM
+      });
+      mockServer.getTransaction.mockResolvedValue({ status: 'SUCCESS' });
+      mockServer.sendTransaction.mockResolvedValue({ hash: 'tx123' });
+
+      mockRedisService = {
+        incrBy: jest.fn().mockResolvedValue(100000),
+      };
+      mockWebhookService = {
+        dispatchEvent: jest.fn().mockResolvedValue(undefined),
+      };
+      mockContractStateGuard = {
+        validatePreconditions: jest.fn().mockResolvedValue(undefined),
+      };
+      mockMetricsService = {
+        incrementStellarTransaction: jest.fn(),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          StellarService,
+          { provide: ConfigService, useValue: mockConfigServiceWithFees },
+          { provide: WinstonLogger, useValue: mockLogger },
+          { provide: RedisService, useValue: mockRedisService },
+          { provide: WebhookService, useValue: mockWebhookService },
+          { provide: ContractStateGuard, useValue: mockContractStateGuard },
+          { provide: MetricsService, useValue: mockMetricsService },
+        ],
+      }).compile();
+
+      service = module.get<StellarService>(StellarService);
+    });
+
+    describe('estimateFee()', () => {
+      it('returns correct fee for payout operation', async () => {
+        const spy = jest.spyOn(service as any, 'simulatePayoutFee').mockResolvedValue(150000);
+        const fee = await service.estimateFee('payout');
+        expect(fee).toBe(150000);
+        expect(spy).toHaveBeenCalled();
+      });
+
+      it('returns correct fee for contribute operation', async () => {
+        const spy = jest.spyOn(service as any, 'simulateContributeFee').mockResolvedValue(120000);
+        const fee = await service.estimateFee('contribute');
+        expect(fee).toBe(120000);
+        expect(spy).toHaveBeenCalled();
+      });
+
+      it('returns 0 for deploy operation', async () => {
+        const fee = await service.estimateFee('deploy');
+        expect(fee).toBe(0);
+      });
+
+      it('throws BadRequestException for unsupported operation', async () => {
+        await expect(service.estimateFee('unknown' as any)).rejects.toThrow(BadRequestException);
+      });
+    });
+
+    describe('extractMinResourceFee()', () => {
+      it('extracts fee from simulation result with minResourceFee in result object', () => {
+        const simulation = { result: { minResourceFee: '123456' } };
+        const fee = (service as any).extractMinResourceFee(simulation);
+        expect(fee).toBe(123456);
+      });
+
+      it('extracts fee from simulation result with minResourceFee at root', () => {
+        const simulation = { minResourceFee: '654321' };
+        const fee = (service as any).extractMinResourceFee(simulation);
+        expect(fee).toBe(654321);
+      });
+
+      it('extracts fee when minResourceFee is a number', () => {
+        const simulation = { result: { minResourceFee: 999999 } };
+        const fee = (service as any).extractMinResourceFee(simulation);
+        expect(fee).toBe(999999);
+      });
+
+      it('returns 0 for missing fee field', () => {
+        const fee = (service as any).extractMinResourceFee({});
+        expect(fee).toBe(0);
+      });
+
+      it('returns 0 for null/undefined simulation', () => {
+        expect((service as any).extractMinResourceFee(null)).toBe(0);
+        expect((service as any).extractMinResourceFee(undefined)).toBe(0);
+      });
+    });
+
+    describe('disbursePayout() - fee cap and buffer', () => {
+      it('successfully submits payout with fee within cap and applies buffer', async () => {
+        mockServer.simulateTransaction.mockResolvedValueOnce({
+          result: { minResourceFee: '100000' },
+        });
+
+        const txHash = await service.disbursePayout(
+          'CtestContract',
+          'GtestRecipient',
+          '1000',
+        );
+
+        expect(txHash).toBe('tx123');
+        expect(mockServer.sendTransaction).toHaveBeenCalledTimes(1);
+        const sentTx = mockServer.sendTransaction.mock.calls[0][0];
+        expect(sentTx.fee).toBe('120000'); // 100000 * 1.2 = 120000
+      });
+
+      it('rejects payout when simulated fee exceeds max cap', async () => {
+        mockServer.simulateTransaction.mockResolvedValueOnce({
+          result: { minResourceFee: '600000' }, // Above cap 500000
+        });
+
+        await expect(
+          service.disbursePayout('CtestContract', 'GtestRecipient', '1000'),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('includes estimated and max fee in error response when cap exceeded', async () => {
+        mockServer.simulateTransaction.mockResolvedValueOnce({
+          result: { minResourceFee: '600000' },
+        });
+
+        try {
+          await service.disbursePayout('CtestContract', 'GtestRecipient', '1000');
+          fail('Expected BadRequestException');
+        } catch (err) {
+          expect(err).toBeInstanceOf(BadRequestException);
+          const body = (err as any).response as any;
+          expect(body.error).toBe('Estimated fee exceeds budget');
+          expect(body.estimatedFee).toBe(600000);
+          expect(body.maxAllowed).toBe(500000);
+        }
+      });
+
+      it('applies fee buffer percentage correctly for 20%', async () => {
+        mockServer.simulateTransaction.mockResolvedValueOnce({
+          result: { minResourceFee: '200000' },
+        });
+
+        await service.disbursePayout('CtestContract', 'GtestRecipient', '1000');
+
+        const sentTx = mockServer.sendTransaction.mock.calls[0][0];
+        expect(sentTx.fee).toBe('240000'); // 200000 * 1.20 = 240000
+      });
+
+      it('applies fee buffer correctly for custom percent (10%)', async () => {
+        // Reconfigure service with 10% buffer
+        const customConfig = {
+          get: jest.fn((key: string, defaultValue?: any) => {
+            const values: Record<string, any> = {
+              STELLAR_RPC_URL: 'https://soroban-testnet.stellar.org',
+              STELLAR_NETWORK: 'testnet',
+              STELLAR_NETWORK_PASSPHRASE: (StellarSdk as any).Networks.TESTNET,
+              CONTRACT_ADDRESS: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4',
+              STELLAR_ISSUER_ACCOUNT: undefined,
+              STELLAR_MAX_FEE_STROOPS: '500000',
+              STELLAR_FEE_BUFFER_PERCENT: '10',
+              STELLAR_DAILY_FEE_ALERT_XLM: '10',
+            };
+            return values[key] ?? defaultValue;
+          }),
+        };
+        const customModule: TestingModule = await Test.createTestingModule({
+          providers: [
+            StellarService,
+            { provide: ConfigService, useValue: customConfig },
+            { provide: WinstonLogger, useValue: mockLogger },
+            { provide: RedisService, useValue: mockRedisService },
+            { provide: WebhookService, useValue: mockWebhookService },
+            { provide: ContractStateGuard, useValue: mockContractStateGuard },
+            { provide: MetricsService, useValue: mockMetricsService },
+          ],
+        }).compile();
+        const customService = customModule.get<StellarService>(StellarService);
+        mockServer.simulateTransaction.mockResolvedValueOnce({
+          result: { minResourceFee: '100000' },
+        });
+
+        await customService.disbursePayout('CtestContract', 'GtestRecipient', '1000');
+
+        const sentTx = mockServer.sendTransaction.mock.calls[0][0];
+        expect(sentTx.fee).toBe('110000'); // 100000 * 1.10 = 110000
+      });
+
+      it('logs fee details at INFO level', async () => {
+        mockServer.simulateTransaction.mockResolvedValueOnce({
+          result: { minResourceFee: '150000' },
+        });
+
+        await service.disbursePayout('CtestContract', 'GtestRecipient', '1000');
+
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.stringContaining('estimated=150000'),
+          'StellarService',
+        );
+        expect(mockLogger.info).toHaveBeenCalledWith(
+          expect.stringContaining('final=180000'), // 150000 * 1.2 = 180000 rounded up
+          'StellarService',
+        );
+      });
+    });
+
+    describe('recordFeeSpend()', () => {
+      it('increments daily fee counter in Redis with correct key', async () => {
+        const recordSpy = jest.spyOn(service as any, 'recordFeeSpend');
+        // We'll trigger via disbursePayout, but can also call directly via reflection
+        await (service as any).recordFeeSpend(50000);
+
+        expect(mockRedisService.incrBy).toHaveBeenCalledWith(
+          expect.stringMatching(/^stellar:fees:\d{4}-\d{2}-\d{2}$/),
+          50000,
+        );
+      });
+
+      it('triggers webhook alert when cumulative daily spend exceeds threshold', async () => {
+        mockRedisService.incrBy = jest.fn().mockResolvedValue(15000000); // 1.5 XLM > 10 XLM threshold
+
+        await (service as any).recordFeeSpend(500000);
+
+        expect(mockWebhookService.dispatchEvent).toHaveBeenCalledWith('DAILY_FEE_EXCEEDED', {
+          date: expect.any(String),
+          currentTotalStroops: 15000000,
+          thresholdStroops: 100000000, // 10 XLM in stroops
+          transactionFee: 500000,
+        });
+      });
+
+      it('does not trigger webhook when below threshold', async () => {
+        mockRedisService.incrBy = jest.fn().mockResolvedValue(50000);
+
+        await (service as any).recordFeeSpend(30000);
+
+        expect(mockWebhookService.dispatchEvent).not.toHaveBeenCalled();
+      });
+
+      it('gracefully handles Redis errors without throwing', async () => {
+        mockRedisService.incrBy = jest.fn().mockRejectedValue(new Error('Redis down'));
+
+        // Should not throw
+        await expect((service as any).recordFeeSpend(1000)).resolves.not.toThrow();
+        expect(mockLogger.error).toHaveBeenCalled();
+      });
+
+      it('does nothing for zero or negative fee', async () => {
+        mockRedisService.incrBy = jest.fn();
+        await (service as any).recordFeeSpend(0);
+        expect(mockRedisService.incrBy).not.toHaveBeenCalled();
+
+        await (service as any).recordFeeSpend(-100);
+        expect(mockRedisService.incrBy).not.toHaveBeenCalled();
+      });
     });
   });
 });

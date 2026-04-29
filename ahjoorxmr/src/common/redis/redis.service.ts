@@ -124,10 +124,25 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
-  /**
-   * Delete a key from Redis.
-   */
-  async del(key: string): Promise<number> {
+   /**
+    * Increment a key by the given amount (atomic).
+    * Returns the new value after increment.
+    */
+   async incrBy(key: string, increment: number): Promise<number> {
+     try {
+       return await this.client.incrby(key, increment);
+     } catch (error) {
+       this.logger.error(
+         `Error incrementing key ${key}: ${(error as Error).message}`,
+       );
+       return 0;
+     }
+   }
+
+   /**
+    * Delete a key from Redis.
+    */
+   async del(key: string): Promise<number> {
     try {
       return await this.client.del(key);
     } catch (error) {

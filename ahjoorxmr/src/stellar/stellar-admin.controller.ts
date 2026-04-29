@@ -1,10 +1,11 @@
-import { Controller, Get, Param, UseGuards, Version } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Version, Query, BadRequestException } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -98,16 +99,48 @@ export class StellarAdminController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden – admin only' })
-  @ApiResponse({ status: 502, description: 'Stellar RPC error' })
-  async getMonitoredBalances(): Promise<
-    Array<{
-      accountId: string;
-      currentBalance: string;
-      minimumRequired: string;
-      isLow: boolean;
-      timestamp: Date;
-    }>
-  > {
-    return this.balanceMonitorService.getCurrentBalances();
-  }
-}
+   @ApiResponse({ status: 502, description: 'Stellar RPC error' })
+   async getMonitoredBalances(): Promise<
+     Array<{
+       accountId: string;
+       currentBalance: string;
+       minimumRequired: string;
+       isLow: boolean;
+       timestamp: Date;
+     }>
+   > {
+     return this.balanceMonitorService.getCurrentBalances();
+   }
+
+   @Get('fee-estimate')
+   @ApiOperation({
+     summary: 'Estimate transaction fee for an operation',
+     description:
+       'Returns the current estimated fee (in stroops) for the specified operation type by simulating it without submitting.',
+   })
+   @ApiQuery({
+     name: 'operation',
+     required: true,
+     enum: ['contribute', 'payout', 'deploy'],
+     description: 'Operation type to estimate',
+   })
+   @ApiResponse({
+     status: 200,
+     description: 'Fee estimate',
+     schema: {
+       type: 'object',
+       properties: {
+         operation: { type: 'string', example: 'payout' },
+         estimatedFee: { type: 'number', example: 150000 },
+         unit: { type: 'string', example: 'stroops' },
+       },
+     },
+   })
+   @ApiResponse({ status: 400, description: 'Invalid operation specified' })
+   async estimateFee(
+     @Query('operation') operation: string,
+   ): Promise<{ operation: string; estimatedFee: number; unit: string }> {
+     const fee = await this.stellarService.estimateFee(operation);
+     return { operation, estimatedFee: fee, unit: 'stroops' };
+   }
+ }
