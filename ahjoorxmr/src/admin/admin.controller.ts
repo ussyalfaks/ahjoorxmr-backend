@@ -23,7 +23,9 @@ import { JwtService } from '@nestjs/jwt';
 import { AdminGuard } from './admin.guard';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { AuditService } from '../audit/audit.service';
+import { MaintenanceModeService } from '../common/services/maintenance-mode.service';
 import { CreateApiKeyDto, CreateApiKeyResponseDto, ApiKeyResponseDto } from '../api-keys/dto/api-key.dto';
+import { SetMaintenanceModeDto, MaintenanceStatusResponseDto, MaintenanceModeResponseDto } from '../common/dto/maintenance-mode.dto';
 import { AuditLog } from '../audit/entities/audit-log.entity';
 
 @ApiTags('Admin')
@@ -36,6 +38,7 @@ export class AdminController {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly maintenanceModeService: MaintenanceModeService,
   ) {}
 
   @Get()
@@ -155,6 +158,108 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Impersonation audit log entries' })
   async getImpersonationAudit(): Promise<AuditLog[]> {
     return this.auditService.findImpersonationLogs();
+  }
+
+  // ─── Maintenance Mode ───────────────────────────────────────────────────
+
+  /**
+   * Enable or disable global maintenance mode
+   */
+  @Post('maintenance')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Enable or disable global maintenance mode' })
+  @ApiResponse({ status: 200, description: 'Maintenance mode updated' })
+  async setGlobalMaintenance(
+    @Body() dto: SetMaintenanceModeDto,
+    @Request() req: any,
+  ): Promise<MaintenanceModeResponseDto> {
+    const adminId: string = req.user?.sub ?? req.user?.id ?? req.user?.userId ?? 'unknown';
+    
+    const config = {
+      enabled: dto.enabled,
+      message: dto.message ?? 'Platform is under maintenance',
+      retryAfterSeconds: dto.retryAfterSeconds ?? 300,
+      allowedIps: dto.allowedIps ?? [],
+    };
+
+    await this.maintenanceModeService.setGlobalMaintenanceMode(config);
+
+    // Record in audit log
+    await this.auditService.createLog({
+      userId: adminId,
+      action: dto.enabled ? 'MAINTENANCE_MODE_ENABLED' : 'MAINTENANCE_MODE_DISABLED',
+      resource: 'platform',
+      metadata: {
+        message: config.message,
+        retryAfterSeconds: config.retryAfterSeconds,
+        allowedIps: config.allowedIps,
+      },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers?.['user-agent'] ?? null,
+    });
+
+    return {
+      enabled: config.enabled,
+      message: config.message,
+      retryAfter: config.retryAfterSeconds,
+      allowedIps: config.allowedIps,
+    };
+  }
+
+  /**
+   * Enable or disable per-group maintenance mode
+   */
+  @Post('groups/:id/maintenance')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Enable or disable per-group maintenance mode' })
+  @ApiResponse({ status: 200, description: 'Group maintenance mode updated' })
+  async setGroupMaintenance(
+    @Param('id', ParseUUIDPipe) groupId: string,
+    @Body() dto: SetMaintenanceModeDto,
+    @Request() req: any,
+  ): Promise<MaintenanceModeResponseDto> {
+    const adminId: string = req.user?.sub ?? req.user?.id ?? req.user?.userId ?? 'unknown';
+    
+    const config = {
+      enabled: dto.enabled,
+      message: dto.message ?? 'This group is under maintenance',
+      retryAfterSeconds: dto.retryAfterSeconds ?? 300,
+      allowedIps: dto.allowedIps ?? [],
+    };
+
+    await this.maintenanceModeService.setGroupMaintenanceMode(groupId, config);
+
+    // Record in audit log
+    await this.auditService.createLog({
+      userId: adminId,
+      action: dto.enabled ? 'GROUP_MAINTENANCE_ENABLED' : 'GROUP_MAINTENANCE_DISABLED',
+      resource: 'group',
+      resourceId: groupId,
+      metadata: {
+        message: config.message,
+        retryAfterSeconds: config.retryAfterSeconds,
+        allowedIps: config.allowedIps,
+      },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers?.['user-agent'] ?? null,
+    });
+
+    return {
+      enabled: config.enabled,
+      message: config.message,
+      retryAfter: config.retryAfterSeconds,
+      allowedIps: config.allowedIps,
+    };
+  }
+
+  /**
+   * Get current maintenance status (global + all per-group)
+   */
+  @Get('maintenance/status')
+  @ApiOperation({ summary: 'Get current maintenance status' })
+  @ApiResponse({ status: 200, type: MaintenanceStatusResponseDto })
+  async getMaintenanceStatus(): Promise<MaintenanceStatusResponseDto> {
+    return this.maintenanceModeService.getMaintenanceStatus();
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────

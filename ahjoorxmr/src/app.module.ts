@@ -1,7 +1,7 @@
 import { Module, OnApplicationShutdown, Logger, Inject } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -54,6 +54,7 @@ import { AdminModule } from './admin/admin.module';
 import { PenaltiesModule } from './penalties/penalties.module';
 import { Penalty } from './penalties/entities/penalty.entity';
 import { NotificationPreference } from './notification/notification-preference.entity';
+import { MaintenanceModeGuard } from './common/guards/maintenance-mode.guard';
 import { WaitlistModule } from './waitlist/waitlist.module';
 import { GroupWaitlist } from './waitlist/entities/group-waitlist.entity';
 import { TrustScoreModule } from './trust-score/trust-score.module';
@@ -173,6 +174,10 @@ import { MemberTrustScore } from './trust-score/entities/member-trust-score.enti
     },
     ReadQueryRunner,
     useClass: MetricsInterceptor,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: MaintenanceModeGuard,
     },
   ],
 })
