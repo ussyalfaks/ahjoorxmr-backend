@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   InternalServerErrorException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -22,6 +23,8 @@ import { TransferAdminDto } from './dto/transfer-admin.dto';
 import { MembershipStatus } from '../memberships/entities/membership-status.enum';
 import { AuditService } from '../audit/audit.service';
 import { GroupTemplatesService } from './group-templates.service';
+import { GroupMaintenanceMixin } from '../common/services/group-maintenance.mixin';
+import { MaintenanceModeService } from '../common/services/maintenance-mode.service';
 
 import { UseReadReplica } from '../common/decorators/read-replica.decorator';
 
@@ -45,6 +48,7 @@ export class GroupsService {
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly groupTemplatesService: GroupTemplatesService,
+    private readonly groupMaintenanceMixin: GroupMaintenanceMixin,
   ) {}
 
   /**
@@ -68,6 +72,16 @@ export class GroupsService {
     );
 
     try {
+      // Check global maintenance mode before creating a group
+      const globalMaintenance = await this.maintenanceModeService.getGlobalMaintenanceMode();
+      if (globalMaintenance?.enabled) {
+        throw new ServiceUnavailableException({
+          statusCode: 503,
+          message: globalMaintenance.message,
+          retryAfter: globalMaintenance.retryAfterSeconds,
+        });
+      }
+
       let finalDto = { ...createGroupDto };
 
       // If templateId is provided, merge template config as defaults

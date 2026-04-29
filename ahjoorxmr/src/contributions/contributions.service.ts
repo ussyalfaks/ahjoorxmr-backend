@@ -20,6 +20,7 @@ import { RoundService } from '../groups/round.service';
 import { UseReadReplica } from '../common/decorators/read-replica.decorator';
 import { WebhookService } from '../webhooks/webhook.service';
 import { QueueService } from '../bullmq/queue.service';
+import { GroupMaintenanceMixin } from '../common/services/group-maintenance.mixin';
 
 /**
  * Service responsible for managing contribution operations in ROSCA groups.
@@ -40,6 +41,7 @@ export class ContributionsService {
     private readonly roundService: RoundService,
     private readonly webhookService: WebhookService,
     private readonly queueService: QueueService,
+    private readonly groupMaintenanceMixin: GroupMaintenanceMixin,
   ) {}
 
   /**
@@ -88,6 +90,9 @@ export class ContributionsService {
     try {
       // Validate group exists and fetch it
       const group = await this.validateGroupExists(groupId);
+
+      // Check if group is under maintenance mode
+      await this.groupMaintenanceMixin.checkGroupMaintenance(groupId);
 
       // Check membership status — suspended members cannot contribute
       const membership = await this.membershipRepository.findOne({
