@@ -9,6 +9,7 @@ import { WinstonLogger } from '../common/logger/winston.logger';
 import { NotificationsModule } from '../notification/notifications.module';
 import { JwtAuthGuard } from '../groups/guards/jwt-auth.guard';
 import { WaitlistModule } from '../waitlist/waitlist.module';
+import { MemberTrustScore } from '../trust-score/entities/member-trust-score.entity';
 
 /**
  * MembershipsModule manages the relationship between users and ROSCA groups.
@@ -17,7 +18,7 @@ import { WaitlistModule } from '../waitlist/waitlist.module';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Membership, Group, User]),
+    TypeOrmModule.forFeature([Membership, Group, User, MemberTrustScore]),
     NotificationsModule,
     forwardRef(() => WaitlistModule),
   ],

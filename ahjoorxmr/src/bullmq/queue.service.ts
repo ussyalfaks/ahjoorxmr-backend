@@ -13,6 +13,7 @@ import {
   SyncAllGroupsJobData,
   ReconcilePayoutJobData,
   SendPushNotificationJobData,
+  RecalculateTrustScoresJobData,
 } from './queue.interfaces';
 import { TxConfirmationJobData } from './tx-confirmation.processor';
 import { injectTraceContext } from '../common/tracing/stellar-tracing';
@@ -69,6 +70,8 @@ export class QueueService {
     private readonly txConfirmationQueue: Queue,
     @InjectQueue(QUEUE_NAMES.PUSH_NOTIFICATION)
     private readonly pushNotificationQueue: Queue,
+    @InjectQueue(QUEUE_NAMES.TRUST_SCORE)
+    private readonly trustScoreQueue: Queue,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -261,6 +264,24 @@ export class QueueService {
       JOB_NAMES.SEND_PUSH,
       withTraceContext(data),
       defaultJobOptions(opts),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Trust score queue helpers
+  // ---------------------------------------------------------------------------
+  async addRecalculateTrustScores(
+    data: RecalculateTrustScoresJobData,
+    opts?: Partial<JobsOptions>,
+  ) {
+    return this.trustScoreQueue.add(
+      JOB_NAMES.RECALCULATE_TRUST_SCORES,
+      data,
+      defaultJobOptions({
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 10_000 },
+        ...opts,
+      }),
     );
   }
 

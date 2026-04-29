@@ -101,3 +101,13 @@ export interface DeadLetterJobData {
   attemptsMade: number;
   stackTrace?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Trust Score Queue Job Data
+// ---------------------------------------------------------------------------
+export interface RecalculateTrustScoresJobData {
+  /** Optional subset of user IDs to recalculate. If omitted, all users are processed. */
+  userIds?: string[];
+  /** ISO timestamp when the job was enqueued (for audit/logging). */
+  enqueuedAt: string;
+}

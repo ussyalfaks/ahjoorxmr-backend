@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, QueryFailedError } from 'typeorm';
+import { Repository, QueryFailedError, In } from 'typeorm';
 import { Membership } from './entities/membership.entity';
 import { Group } from '../groups/entities/group.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
@@ -17,6 +17,7 @@ import { NotificationsService } from '../notification/notifications.service';
 import { NotificationType } from '../notification/notification-type.enum';
 import { GroupStatus } from '../groups/entities/group-status.enum';
 import { WaitlistService } from '../waitlist/waitlist.service';
+import { MemberTrustScore } from '../trust-score/entities/member-trust-score.entity';
 
 /**
  * Service responsible for managing membership operations in ROSCA groups.
@@ -29,6 +30,8 @@ export class MembershipsService {
     private readonly membershipRepository: Repository<Membership>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
+    @InjectRepository(MemberTrustScore)
+    private readonly trustScoreRepository: Repository<MemberTrustScore>,
     private readonly logger: WinstonLogger,
     private readonly notificationsService: NotificationsService,
     private readonly waitlistService: WaitlistService,
@@ -300,18 +303,18 @@ export class MembershipsService {
 
   /**
    * Lists members of a ROSCA group with pagination.
-   * Returns memberships ordered by payout order.
+   * Returns memberships ordered by payout order, enriched with each member's trust score.
    *
    * @param groupId - The UUID of the group to list members for
    * @param page - Page number (1-indexed, default 1)
    * @param limit - Items per page (default 20, max 100)
-   * @returns Paginated result with data, total, page, and limit
+   * @returns Paginated result with data (including trustScore), total, page, and limit
    */
   async listMembers(
     groupId: string,
     page: number = 1,
     limit: number = 20,
-  ): Promise<{ data: Membership[]; total: number; page: number; limit: number }> {
+  ): Promise<{ data: (Membership & { trustScore: number | null })[]; total: number; page: number; limit: number }> {
     this.logger.log(
       `Listing members for group ${groupId} page=${page} limit=${limit}`,
       'MembershipsService',
@@ -319,12 +322,33 @@ export class MembershipsService {
 
     try {
       const skip = (page - 1) * limit;
-      const [data, total] = await this.membershipRepository.findAndCount({
+      const [memberships, total] = await this.membershipRepository.findAndCount({
         where: { groupId },
         order: { payoutOrder: 'ASC' },
         skip,
         take: limit,
       });
+
+      // Fetch trust scores for all members in one query
+      const userIds = memberships.map((m) => m.userId);
+      const trustScores =
+        userIds.length > 0
+          ? await this.trustScoreRepository.find({
+              where: { userId: In(userIds) },
+              select: ['userId', 'score'],
+            })
+          : [];
+
+      const trustScoreMap = new Map<string, number>(
+        trustScores.map((ts) => [ts.userId, Number(ts.score)]),
+      );
+
+      const data = memberships.map((m) => ({
+        ...m,
+        trustScore: trustScoreMap.has(m.userId)
+          ? trustScoreMap.get(m.userId)!
+          : null,
+      }));
 
       this.logger.log(
         `Found ${total} members for group ${groupId}; returning page ${page}`,

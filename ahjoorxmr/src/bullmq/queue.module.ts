@@ -111,6 +111,7 @@ const bullBoardAuthMiddleware = (req: Request, res: Response, next: NextFunction
         defaultJobOptions: { removeOnComplete: false, removeOnFail: false },
       },
       { name: QUEUE_NAMES.PUSH_NOTIFICATION, ...sharedQueueOptions },
+      { name: QUEUE_NAMES.TRUST_SCORE, ...sharedQueueOptions },
     ),
 
     // Integrate BullBoard
@@ -127,6 +128,7 @@ const bullBoardAuthMiddleware = (req: Request, res: Response, next: NextFunction
       { name: QUEUE_NAMES.TX_CONFIRMATION, adapter: BullMQAdapter },
       { name: QUEUE_NAMES.DEAD_LETTER, adapter: BullMQAdapter },
       { name: QUEUE_NAMES.PUSH_NOTIFICATION, adapter: BullMQAdapter },
+      { name: QUEUE_NAMES.TRUST_SCORE, adapter: BullMQAdapter },
     ),
   ],
   controllers: [QueueAdminController, JobFailuresAdminController],
