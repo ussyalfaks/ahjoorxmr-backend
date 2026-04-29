@@ -56,6 +56,8 @@ import { Penalty } from './penalties/entities/penalty.entity';
 import { NotificationPreference } from './notification/notification-preference.entity';
 import { WaitlistModule } from './waitlist/waitlist.module';
 import { GroupWaitlist } from './waitlist/entities/group-waitlist.entity';
+import { TrustScoreModule } from './trust-score/trust-score.module';
+import { MemberTrustScore } from './trust-score/entities/member-trust-score.entity';
 
 @Module({
   imports: [
@@ -94,6 +96,7 @@ import { GroupWaitlist } from './waitlist/entities/group-waitlist.entity';
             Penalty,
             NotificationPreference,
             GroupWaitlist,
+            MemberTrustScore,
           ],
           synchronize: isDevelopment, // Auto-create tables only in development
           logging: isDevelopment, // Enable logging only in development
@@ -142,6 +145,7 @@ import { GroupWaitlist } from './waitlist/entities/group-waitlist.entity';
     AdminModule,
     PenaltiesModule,
     WaitlistModule,
+    TrustScoreModule,
   ],
   controllers: [AppController],
   providers: [
