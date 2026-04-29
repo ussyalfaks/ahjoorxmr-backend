@@ -16,6 +16,8 @@ import { WinstonLogger } from '../common/logger/winston.logger';
 import type { ContractInvocationResult } from './contract-invocation.types';
 import { MetricsService } from '../metrics/metrics.service';
 import { withStellarSpan } from '../common/tracing/stellar-tracing';
+import { RedisService } from '../common/redis/redis.service';
+import { WebhookService } from '../webhooks/webhook.service';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -57,6 +59,11 @@ export class StellarService {
   private readonly networkPassphrase: string;
   private readonly defaultContractAddress: string;
   private server: any;
+  private readonly redisService: RedisService;
+  private readonly webhookService: WebhookService;
+  private readonly maxFeeStroops: number;
+  private readonly feeBufferPercent: number;
+  private readonly dailyAlertThresholdStroops: number;
 
   constructor(
     private readonly configService: ConfigService,
@@ -65,6 +72,8 @@ export class StellarService {
     private readonly contractStateGuard: ContractStateGuard,
     @Inject(forwardRef(() => MetricsService))
     private readonly metricsService: MetricsService,
+    private readonly redisService: RedisService,
+    private readonly webhookService: WebhookService,
   ) {
     const rawRpcUrls = this.configService.get<string>('STELLAR_RPC_URLS') || this.configService.get<string>('STELLAR_RPC_URL') || '';
     this.rpcUrls = rawRpcUrls.split(',').map(url => url.trim()).filter(url => url.length > 0);
@@ -85,6 +94,14 @@ export class StellarService {
         'STELLAR_NETWORK_PASSPHRASE',
         defaultPassphrase,
       ) ?? defaultPassphrase;
+
+    // Fee configuration
+    const maxFeeStr = this.configService.get<string>('STELLAR_MAX_FEE_STROOPS', '500000');
+    this.maxFeeStroops = parseInt(maxFeeStr, 10) || 500000;
+    const bufferStr = this.configService.get<string>('STELLAR_FEE_BUFFER_PERCENT', '20');
+    this.feeBufferPercent = parseFloat(bufferStr) || 20;
+    const dailyAlertXlm = this.configService.get<number>('STELLAR_DAILY_FEE_ALERT_XLM', 10);
+    this.dailyAlertThresholdStroops = Math.floor(Number(dailyAlertXlm) * 1e7);
 
     this.initializeServer();
   }
@@ -282,21 +299,19 @@ export class StellarService {
     }
 
     try {
-      // Build and submit the disburse_payout contract call
+      // Build and submit the disburse_payout contract call with fee estimation
       const sourceAccount = new (StellarSdk as any).Account(
         (StellarSdk as any).Keypair.random().publicKey(),
         '0',
       );
 
-      let operation: unknown;
+      let operation: any;
       try {
         const contract = new (StellarSdk as any).Contract(contractAddress);
         const asset = this.buildAsset(assetCode ?? 'XLM', assetIssuer ?? null);
         operation = contract.call(
           'disburse_payout',
-          (StellarSdk as any).nativeToScVal(recipientWallet, {
-            type: 'address',
-          }),
+          (StellarSdk as any).nativeToScVal(recipientWallet, { type: 'address' }),
           (StellarSdk as any).nativeToScVal(BigInt(amount), { type: 'i128' }),
           (StellarSdk as any).nativeToScVal(asset),
         );
@@ -304,10 +319,10 @@ export class StellarService {
         operation = { contractAddress, method: 'disburse_payout' };
       }
 
-      let tx: unknown;
+      let tx: any;
       try {
         tx = new (StellarSdk as any).TransactionBuilder(sourceAccount, {
-          fee: '100',
+          fee: '100', // placeholder, will be replaced after simulation
           networkPassphrase: this.networkPassphrase,
         })
           .addOperation(operation)
@@ -319,6 +334,7 @@ export class StellarService {
         return mockHash;
       }
 
+      // Prepare transaction if supported
       if (typeof this.server.prepareTransaction === 'function') {
         tx = await this.withFailover(
           (s) => s.prepareTransaction(tx),
@@ -326,39 +342,64 @@ export class StellarService {
         );
       }
 
-      let txHashToStore =
-        typeof (tx as any).hash === 'function'
-          ? (tx as any).hash().toString('hex')
-          : null;
-      if (!txHashToStore && (tx as any).id) {
-        txHashToStore = (tx as any).id;
+      // Simulate to get estimated fee
+      const estimatedFee = await this.simulateTransactionAndGetFee(tx);
+
+      // Enforce fee cap
+      if (estimatedFee > this.maxFeeStroops) {
+        throw new BadRequestException({
+          error: 'Estimated fee exceeds budget',
+          estimatedFee,
+          maxAllowed: this.maxFeeStroops,
+        } as any);
       }
-      if (!txHashToStore) {
-        txHashToStore = `temp_hash_${Date.now()}`;
-      }
+
+      // Apply buffer
+      const finalFee = Math.ceil(estimatedFee * (1 + this.feeBufferPercent / 100));
+      (tx as any).fee = finalFee.toString();
+
+      this.logger.info(
+        `Transaction fee for disbursePayout: estimated=${estimatedFee} stroops, buffer=${this.feeBufferPercent}%, final=${finalFee} stroops`,
+        'StellarService',
+      );
+
+      // Compute transaction hash after fee adjustment
+      const getTxHash = (t: any): string => {
+        if (typeof t.hash === 'function') return t.hash().toString('hex');
+        if (t.id) return t.id;
+        if (typeof t.hash === 'string') return t.hash;
+        return `temp_hash_${Date.now()}`;
+      };
+      const txHashToStore = getTxHash(tx);
 
       if (onBeforeSubmit) {
         await onBeforeSubmit(txHashToStore);
       }
 
+      // Submit transaction
       const result = await this.withFailover(
         (s) => s.sendTransaction(tx),
         'sendTransaction',
       );
-      const txHash: string =
+
+      let finalTxHash: string =
         result?.hash ??
         result?.id ??
         result?.transactionHash ??
         txHashToStore ??
         String(result);
 
-      if (!txHash) {
+      if (!finalTxHash) {
         this.metricsService.incrementStellarTransaction(false);
         throw new Error('No transaction hash returned from Stellar RPC');
       }
 
       this.metricsService.incrementStellarTransaction(true);
-      return txHash;
+
+      // Record fee spend for daily tracking
+      await this.recordFeeSpend(finalFee);
+
+      return finalTxHash;
     } catch (error) {
       this.metricsService.incrementStellarTransaction(false);
       throw this.mapRpcError('Failed to disburse payout on-chain', error);
@@ -664,18 +705,211 @@ export class StellarService {
     return results;
   }
 
-  private isTransientRpcFailure(error: unknown): boolean {
-    if (error instanceof BadGatewayException) {
-      return false;
+   private isTransientRpcFailure(error: unknown): boolean {
+     if (error instanceof BadGatewayException) {
+       return false;
+     }
+     if (error instanceof BadRequestException) {
+       return false;
+     }
+     const msg = error instanceof Error ? error.message : String(error ?? '');
+     return /timeout|etimedout|econnreset|socket hang up|502|503|network|fetch failed/i.test(
+       msg,
+     );
+   }
+
+   /**
+    * Extracts the minResourceFee from a Soroban simulateTransaction response.
+    * Works for both success and error response shapes.
+    */
+   private extractMinResourceFee(simulation: any): number {
+     if (!simulation || typeof simulation !== 'object') {
+       return 0;
+     }
+     const s = simulation as any;
+     const feeStr = s.result?.minResourceFee ?? s.minResourceFee;
+     if (typeof feeStr === 'string' || typeof feeStr === 'number') {
+       return parseInt(String(feeStr), 10);
+     }
+     // Fallback to 0 if not present
+     return 0;
+   }
+
+   /**
+    * Simulates a transaction and returns the estimated minResourceFee.
+    */
+   private async simulateTransactionAndGetFee(tx: any): Promise<number> {
+     const simulation = await this.withFailover(
+       (s) => s.simulateTransaction(tx),
+       'simulateTransaction',
+     );
+     return this.extractMinResourceFee(simulation);
+   }
+
+   /**
+    * Records the fee spent for a successful transaction, checks daily threshold, and fires alerts.
+    */
+   private async recordFeeSpend(feeStroops: number): Promise<void> {
+     if (feeStroops <= 0) return;
+
+     const today = new Date().toISOString().slice(0, 10);
+     const key = `stellar:fees:${today}`;
+
+     try {
+       const current = await this.redisService.incrBy(key, feeStroops);
+       if (current > this.dailyAlertThresholdStroops) {
+         this.logger.warn(
+           `Daily fee spend ${current} stroops exceeds threshold ${this.dailyAlertThresholdStroops} (${this.configService.get('STELLAR_DAILY_FEE_ALERT_XLM', '10')} XLM)`,
+           'StellarService',
+         );
+         // Fire webhook event
+         try {
+           await this.webhookService.dispatchEvent('DAILY_FEE_EXCEEDED', {
+             date: today,
+             currentTotalStroops: current,
+             thresholdStroops: this.dailyAlertThresholdStroops,
+             transactionFee: feeStroops,
+           });
+         } catch (err) {
+           this.logger.error(
+             `Failed to dispatch DAILY_FEE_EXCEEDED webhook: ${err instanceof Error ? err.message : String(err)}`,
+             'StellarService',
+           );
+         }
+       }
+     } catch (error) {
+       this.logger.error(
+         `Failed to record fee spend: ${error instanceof Error ? error.message : String(error)}`,
+         'StellarService',
+       );
+     }
+   }
+
+   /**
+    * Simulates a payout transaction and returns the estimated fee.
+    * Used for fee estimation without actual submission.
+    */
+   private async simulatePayoutFee(): Promise<number> {
+     const contractAddress = this.defaultContractAddress;
+     if (!contractAddress) {
+       throw new InternalServerErrorException('Missing CONTRACT_ADDRESS for fee simulation');
+     }
+
+     const sourceAccount = new (StellarSdk as any).Account(
+       (StellarSdk as any).Keypair.random().publicKey(),
+       '0',
+     );
+
+     const contract = new (StellarSdk as any).Contract(contractAddress);
+     const asset = this.buildAsset('XLM', null);
+     const dummyRecipient = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+     const amount = '1';
+
+     let operation: any;
+     try {
+       operation = contract.call(
+         'disburse_payout',
+         (StellarSdk as any).nativeToScVal(dummyRecipient, { type: 'address' }),
+         (StellarSdk as any).nativeToScVal(BigInt(amount), { type: 'i128' }),
+         (StellarSdk as any).nativeToScVal(asset),
+       );
+     } catch {
+       operation = { contractAddress, method: 'disburse_payout' };
+     }
+
+     let tx: any;
+     try {
+       tx = new (StellarSdk as any).TransactionBuilder(sourceAccount, {
+         fee: '100', // placeholder
+         networkPassphrase: this.networkPassphrase,
+       })
+         .addOperation(operation)
+         .setTimeout(30)
+         .build();
+     } catch {
+       tx = { contractAddress, method: 'disburse_payout', networkPassphrase: this.networkPassphrase };
+     }
+
+     if (typeof this.server.prepareTransaction === 'function') {
+       tx = await this.withFailover(
+         (s) => s.prepareTransaction(tx),
+         'prepareTransaction',
+       );
+     }
+
+     return await this.simulateTransactionAndGetFee(tx);
+   }
+
+   /**
+    * Simulates a contribution transaction and returns the estimated fee.
+    */
+   private async simulateContributeFee(): Promise<number> {
+     const contractAddress = this.defaultContractAddress;
+     if (!contractAddress) {
+       throw new InternalServerErrorException('Missing CONTRACT_ADDRESS for fee simulation');
+     }
+
+     const sourceAccount = new (StellarSdk as any).Account(
+       (StellarSdk as any).Keypair.random().publicKey(),
+       '0',
+     );
+
+     const contract = new (StellarSdk as any).Contract(contractAddress);
+     const asset = this.buildAsset('XLM', null);
+     const amount = '1';
+
+     let operation: any;
+     try {
+       operation = contract.call(
+         'contribute',
+         (StellarSdk as any).nativeToScVal(BigInt(amount), { type: 'i128' }),
+         (StellarSdk as any).nativeToScVal(asset),
+       );
+     } catch {
+       operation = { contractAddress, method: 'contribute' };
+     }
+
+     let tx: any;
+     try {
+       tx = new (StellarSdk as any).TransactionBuilder(sourceAccount, {
+         fee: '100',
+         networkPassphrase: this.networkPassphrase,
+       })
+         .addOperation(operation)
+         .setTimeout(30)
+         .build();
+     } catch {
+       tx = { contractAddress, method: 'contribute', networkPassphrase: this.networkPassphrase };
+     }
+
+     if (typeof this.server.prepareTransaction === 'function') {
+       tx = await this.withFailover(
+         (s) => s.prepareTransaction(tx),
+         'prepareTransaction',
+       );
+     }
+
+     return await this.simulateTransactionAndGetFee(tx);
+   }
+
+   /**
+    * Estimates the transaction fee for a given operation type.
+    * @param operation - The operation name: 'contribute' | 'payout' | 'deploy'
+    * @returns Estimated fee in stroops
+    */
+    public async estimateFee(operation: string): Promise<number> {
+      switch (operation) {
+        case 'payout':
+          return await this.simulatePayoutFee();
+        case 'contribute':
+          return await this.simulateContributeFee();
+        case 'deploy':
+          // Contract deployment is off-chain in current implementation; fee is zero.
+          return 0;
+        default:
+          throw new BadRequestException(`Unsupported operation: ${operation}`);
+      }
     }
-    if (error instanceof BadRequestException) {
-      return false;
-    }
-    const msg = error instanceof Error ? error.message : String(error ?? '');
-    return /timeout|etimedout|econnreset|socket hang up|502|503|network|fetch failed/i.test(
-      msg,
-    );
-  }
 
   private extractSimulationResultXdr(simulation: unknown): string | undefined {
     if (!simulation || typeof simulation !== 'object') {
